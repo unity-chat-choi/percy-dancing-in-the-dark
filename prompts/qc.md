@@ -34,6 +34,13 @@ Use real staging data; if a screen has no data on staging, say so instead of gue
 Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
 [{"screen": "<short name>", "figma": "<file name in ../ctx/figma or empty>", "shots": {"light": "<file in ../shots>", "dark": "...", "rtl": "..."}, "verdict": "khớp|lệch|không test được", "notes": "<one line: what differs>"}]
 
+Same data on both platforms: if ../ctx/peer-test-data.json exists, the other platform already tested with that data (league, season, team, match, screens): use EXACTLY the same data so iOS and Android can be compared. Always write ../ctx/test-data.json with the data you used: {"screens":[{"name":"...","how":"deeplink/navigation","data":{"league":"id/name","season":"...","other":"..."}}]}.
+
+Definition of done (the worker decides with this file, write it last): ../ctx/verdict.json
+{"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>"}
+- PASS = every case checked in light, dark and RTL and matches Figma + requirement. FAIL = checked, and you found bugs (listed in the report).
+- A mode you could not reach is false, and then result must be BLOCKED: the task goes back to the queue and the next run continues from your lessons. Never mark PASS/FAIL with a mode missing.
+
 Write ../ctx/qc-report.md in Vietnamese, short, for Telegram (no markdown tables):
 ## Kết quả: PASS / FAIL / CHƯA TEST ĐƯỢC  (x/y test case pass)
 ## Test case QC — one line each: TC_ID — Pass/Fail/Không test được — lý do ngắn

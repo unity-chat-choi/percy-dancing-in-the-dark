@@ -305,7 +305,9 @@ jobs:
 
       - name: rulebook
         env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
-        run: python3 -I runner/scripts/lessons.py get ctx/lessons.md
+        run: |
+          python3 -I runner/scripts/lessons.py get ctx/lessons.md
+          python3 -I runner/scripts/task-files.py get "$ISSUE" android ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
       - name: qc
         working-directory: app
@@ -330,6 +332,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TASKS_PAT }}
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
         run: bash runner/scripts/qc-report.sh ios "${{ job.status }}"
 
   android:
@@ -423,7 +427,9 @@ jobs:
 
       - name: rulebook
         env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
-        run: python3 -I runner/scripts/lessons.py get ctx/lessons.md
+        run: |
+          python3 -I runner/scripts/lessons.py get ctx/lessons.md
+          python3 -I runner/scripts/task-files.py get "$ISSUE" ios ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
       - name: emulator + qc
         uses: reactivecircus/android-emulator-runner@v2
@@ -449,6 +455,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TASKS_PAT }}
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
         run: bash runner/scripts/qc-report.sh android "${{ job.status }}"
 
   # One report for both platforms: one task comment, one Telegram message, one HTML.

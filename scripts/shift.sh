@@ -134,6 +134,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
     python3 -I "$R/lessons.py" get ctx/lessons.md >/dev/null
+    # same data as the other platform, when it went first
+    python3 -I "$R/task-files.py" get "$N" "$O" ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json
     step "$N" "Claude bắt đầu QC"
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
@@ -146,13 +148,18 @@ while [ "$(date +%s)" -lt "$END" ]; do
   kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
   python3 -I "$R/lessons.py" add ctx/lessons-new.md 2>/dev/null || true
   step "$N" "Lưu kết quả QC"
-  bash "$R/qc-report.sh" "$P" "shift"
-  label DELETE "$N" "$P-running"; label POST "$N" "" "$P-done"
+  bash "$R/qc-report.sh" "$P" "shift"   # labels: <P>-done, or back to <P>-todo (retry), or blocked
+  case "$(cat ctx/qc-status 2>/dev/null)" in
+    done) step "$N" "Xong $P (đủ light/dark/RTL)";;
+    retry) step "$N" "Chưa xong $P, xếp hàng thử lại";;
+    *) step "$N" "Kẹt $P sau 3 lần, đã báo anh";;
+  esac
   gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1  # free the claim for a later re-test
   # Whoever finishes last (or alone) sends the merged report.
   LABELS=$(gh api "repos/$TASKS_REPO/issues/$N" --jq '[.labels[].name] | join(",")')
-  grep -qE "(^|,)($O-todo|$O-running|reported)(,|$)" <<<"$LABELS" || send_report "$N" reported
-  step "$N" "Xong"
+  if grep -qE "(^|,)$P-done(,|$)" <<<"$LABELS" && grep -qE "(^|,)$O-done(,|$)" <<<"$LABELS" && ! grep -qE "(^|,)reported(,|$)" <<<"$LABELS"; then
+    send_report "$N" reported
+  fi
   DONE=$((DONE + 1)); log "task done ($DONE this shift)"
 done
 # Shift over: tasks this platform finished while the other is still queued get a partial report now;
