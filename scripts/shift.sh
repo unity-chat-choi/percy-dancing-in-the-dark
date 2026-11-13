@@ -61,7 +61,9 @@ send_report() {  # <issue> <reported|reported-partial>: merged report of whateve
 }
 
 # --- warm up
-gl clone -q --depth 200 --branch app-develop "$REPO_URL" app && cd app
+# app/ may already hold cached node_modules (and ios/Pods): init in place instead of cloning into it.
+mkdir -p app && cd app && git init -q 2>/dev/null; git remote add origin "$REPO_URL" 2>/dev/null
+gl fetch -q --depth 200 origin app-develop && git checkout -q -f FETCH_HEAD
 yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
 if [ "$P" = ios ]; then
   sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)" >/dev/null
@@ -74,11 +76,16 @@ build_app || exit 1
 curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; export PATH="$HOME/.maestro/bin:$PATH"
 npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
 BASE=$(git rev-parse HEAD); DONE=0
-log "warm, taking tasks"
+CLAIM_SHA=$(gh api "repos/$TASKS_REPO/commits/HEAD" --jq .sha)
+log "warm, taking tasks (worker ${WORKER:-1})"
 
 # --- task loop
 while [ "$(date +%s)" -lt "$END" ]; do
-  N=$(gh api "repos/$TASKS_REPO/issues?labels=$P-todo&state=open&sort=created&direction=asc" --jq '.[0].number // empty' 2>/dev/null)
+  N=""
+  for c in $(gh api "repos/$TASKS_REPO/issues?labels=$P-todo&state=open&sort=created&direction=asc" --jq '.[].number' 2>/dev/null); do
+    # Creating a ref is atomic: only one worker gets it, the others move on to the next task.
+    if gh api -X POST "repos/$TASKS_REPO/git/refs" -f ref="refs/claims/$c-$P" -f sha="$CLAIM_SHA" >/dev/null 2>&1; then N=$c; break; fi
+  done
   [ -z "$N" ] && { sleep 30; continue; }
   label POST "$N" "" "$P-running"; label DELETE "$N" "$P-todo"
   export ISSUE="$N"; cd "$W"; rm -rf ctx shots; mkdir -p ctx/figma shots
@@ -111,6 +118,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   fi
   bash "$R/qc-report.sh" "$P" "shift"
   label DELETE "$N" "$P-running"; label POST "$N" "" "$P-done"
+  gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1  # free the claim for a later re-test
   # Whoever finishes last (or alone) sends the merged report.
   LABELS=$(gh api "repos/$TASKS_REPO/issues/$N" --jq '[.labels[].name] | join(",")')
   grep -qE "(^|,)($O-todo|$O-running|reported)(,|$)" <<<"$LABELS" || send_report "$N" reported

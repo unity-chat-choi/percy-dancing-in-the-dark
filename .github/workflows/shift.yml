@@ -9,6 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       minutes: { description: "Shift length in minutes (max 350)", default: "120" }
+      ios_workers: { description: "iOS simulators (macOS free plan: max 5 at once)", default: "2" }
+      android_workers: { description: "Android emulators", default: "3" }
 
 permissions: {}
 
@@ -34,7 +36,24 @@ env:
   MINUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.minutes || (github.event.schedule == '0 2 * * 1-5' && '350' || '175') }}
 
 jobs:
+  # Worker counts → matrix lists. Schedules use the defaults (2 iOS, 3 Android).
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.p.outputs.ios }}
+      android: ${{ steps.p.outputs.android }}
+    steps:
+      - id: p
+        run: |
+          r() { python3 -c "import json,sys;print(json.dumps(list(range(1,max(1,min(int(sys.argv[1]),$2))+1))))" "$1"; }
+          echo "ios=$(r '${{ inputs.ios_workers || '2' }}' 5)" >> "$GITHUB_OUTPUT"
+          echo "android=$(r '${{ inputs.android_workers || '3' }}' 8)" >> "$GITHUB_OUTPUT"
+
   ios:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: { worker: "${{ fromJSON(needs.plan.outputs.ios) }}" }
     runs-on: macos-26
     timeout-minutes: 360
     defaults: { run: { shell: bash } }
@@ -43,10 +62,23 @@ jobs:
         with: { path: runner }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            app/node_modules
+            app/ios/Pods
+            build
+          key: shift-ios-${{ github.run_id }}
+          restore-keys: shift-ios-
       - name: shift
+        env: { WORKER: "${{ matrix.worker }}" }
         run: bash runner/scripts/shift.sh ios
 
   android:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: { worker: "${{ fromJSON(needs.plan.outputs.android) }}" }
     runs-on: ubuntu-latest
     timeout-minutes: 360
     defaults: { run: { shell: bash } }
@@ -62,8 +94,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: shift-gradle-${{ github.run_id }}
-          restore-keys: shift-gradle-
+            app/node_modules
+          key: shift-android-${{ github.run_id }}
+          restore-keys: shift-android-
       - name: enable kvm
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
@@ -77,4 +110,4 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash runner/scripts/shift.sh android
+          script: WORKER=${{ matrix.worker }} bash runner/scripts/shift.sh android
