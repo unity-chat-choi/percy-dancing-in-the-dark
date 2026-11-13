@@ -19,6 +19,9 @@ For every screen in scope check three modes and screenshot each into ../shots/ (
 Open each screenshot with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
 Use real staging data; if a screen has no data on staging, say so instead of guessing. Do not change code, do not commit, do not call external services, never print secrets.
 
+Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
+[{"screen": "<short name>", "figma": "<file name in ../ctx/figma or empty>", "shots": {"light": "<file in ../shots>", "dark": "...", "rtl": "..."}, "verdict": "khớp|lệch|không test được", "notes": "<one line: what differs>"}]
+
 Write ../ctx/ios-report.md in Vietnamese, short, for Telegram (no markdown tables):
 ## Kết quả: PASS / FAIL / CHƯA TEST ĐƯỢC  (x/y test case pass)
 ## Test case QC — one line each: TC_ID — Pass/Fail/Không test được — lý do ngắn
