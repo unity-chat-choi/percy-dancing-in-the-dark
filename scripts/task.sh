@@ -1,10 +1,10 @@
 #!/bin/bash
 # Create a task in the private task repo and start the ticket runner on it.
-# Usage: scripts/task.sh <branch> [account 1-3] [model] [notes...]
+# Usage: scripts/task.sh <branch> [account 1-3|auto] [model] [notes...]   (auto skips accounts near the weekly cap)
 #   The Jira key is taken from the branch name; the issue title is "<KEY> <Jira summary>".
 # Reads ~/.config/cutcut/uniscore-runner-secrets.env (TASKS_REPO, JIRA_*). Needs gh logged in.
 set -euo pipefail
-BRANCH="${1:?branch required}"; ACCOUNT="${2:-1}"; MODEL="${3:-opus}"; shift $(( $# < 3 ? $# : 3 )); NOTES="$*"
+BRANCH="${1:?branch required}"; ACCOUNT="${2:-auto}"; MODEL="${3:-opus}"; shift $(( $# < 3 ? $# : 3 )); NOTES="$*"
 RUNNER="${RUNNER_REPO:-unity-chat-choi/percy-dancing-in-the-dark}"
 set -a; . "${RUNNER_ENV:-$HOME/.config/cutcut/uniscore-runner-secrets.env}"; set +a
 KEY=$(grep -oE '(US|UTD|UOB)-[0-9]+' <<<"$BRANCH" | head -1)

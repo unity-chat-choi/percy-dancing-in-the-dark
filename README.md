@@ -58,9 +58,9 @@ Máy Mac (launchd): `ask-bot.py` (hỏi đáp dự án, chỉ đọc), `mac-retr
 
 ### Giao việc cho runner
 ```
-scripts/task.sh <nhánh RN> [account 1-3] [model] [ghi chú...]
+scripts/task.sh <nhánh RN> [account 1-3|auto] [model] [ghi chú...]
 ```
-Tạo task trong repo private (tiêu đề = mã Jira + tên ticket), rồi chạy `ticket` với số task. Runner luôn làm theo ticket Jira: gom context (`ticket-context.py`) và Figma trước khi code.
+Tạo task trong repo private (tiêu đề = mã Jira + tên ticket), rồi chạy `ticket` với số task. Tài khoản Claude chọn tự động (`pick-account.py`): bỏ qua tài khoản đã dùng ≥ 90% quota tuần mà còn hơn 1 ngày mới reset. Runner luôn làm theo ticket Jira: gom context (`ticket-context.py`) và Figma trước khi code.
 
 ### Cài trên máy mới
 1. `gh auth login`
