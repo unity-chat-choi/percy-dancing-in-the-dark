@@ -6,7 +6,14 @@ set -uo pipefail
 P="$1"; STATUS="$2"
 if [ ! -s ctx/qc-report.md ]; then
   { echo "## Kết quả: CHƯA TEST ĐƯỢC"; echo
-    if [ -s ctx/build-errors.txt ]; then echo "Build $P lỗi:"; cat ctx/build-errors.txt; else echo "Bước $P dừng trước khi QC xong ($STATUS)."; fi
+    if [ -s ctx/build-errors.txt ]; then echo "Build $P lỗi:"; cat ctx/build-errors.txt
+    else echo "Bước $P dừng trước khi QC xong ($STATUS)."
+      # Why Claude stopped (private report only): error flag, turns, last result text.
+      [ -s ctx/qc.json ] && python3 -I -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+print("Claude:", "lỗi" if d.get("is_error") else "xong", "· subtype", d.get("subtype"), "· turns", d.get("num_turns"), "· $", round(d.get("total_cost_usd") or 0, 2))
+print((d.get("result") or "")[:1500])' ctx/qc.json || echo "Claude không trả kết quả (qc.json trống)."
+    fi
   } > ctx/qc-report.md
 fi
 [ -s ctx/pairs.json ] || echo '[]' > ctx/pairs.json

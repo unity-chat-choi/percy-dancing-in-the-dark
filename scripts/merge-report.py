@@ -5,7 +5,7 @@ Usage: merge-report.py <title> <figma dir> <qc root> <issue> <out dir>
 Writes <out>/report.html (Figma | Light | Dark | RTL per screen and platform), <out>/comment.md (with in-repo
 image links, for the private task) and <out>/telegram.md (text only).
 """
-import base64, html, json, os, re, subprocess, sys
+import base64, html, json, os, re, sys
 
 title, figma_dir, root, issue, out = sys.argv[1:6]
 PLATS = [p for p in ("ios", "android") if os.path.isfile(os.path.join(root, p, "qc-report.md"))]
@@ -125,8 +125,7 @@ comment = tg
 for p, d in data.items():
     imgs = [f for f in sorted(os.listdir(d["dir"])) if f.endswith(".png")]
     if imgs:
-        links = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(__file__), "task-files.py"), "url", issue, p, "x"],
-                               capture_output=True, text=True).stdout.strip().rsplit("/", 1)[0]
-        comment += f"\n### Ảnh {NAME[p]}\n" + "\n".join(f'<img src="{links}/{f}?raw=true" width="220" alt="{f}">' for f in imgs) + "\n"
+        base = f"https://github.com/{os.environ['TASKS_REPO']}/blob/HEAD/qc/issue-{issue}/{p}"
+        comment += f"\n### Ảnh {NAME[p]}\n" + "\n".join(f'<img src="{base}/{f}?raw=true" width="220" alt="{f}">' for f in imgs) + "\n"
 open(os.path.join(out, "comment.md"), "w").write(comment)
 print(f"merged: {', '.join(PLATS) or 'none'}; {len(screens)} screens")
