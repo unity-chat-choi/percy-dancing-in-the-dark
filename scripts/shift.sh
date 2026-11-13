@@ -110,11 +110,13 @@ while [ "$(date +%s)" -lt "$END" ]; do
   reset_device
   cd "$W"
   step "$N" "Đọc Jira, Confluence, Figma"
-  python3 -I "$R/ticket-context.py" "$KEY" ctx/context.md >/dev/null && python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null
+  KEYS=$(grep -oE '(US|UTD|UOB)-[0-9]+' ctx/task.md | sort -u | tr '\n' ' '); for k in $KEYS; do echo "::add-mask::$k"; done
+  for k in $KEYS; do python3 -I "$R/ticket-context.py" "$k" "ctx/c-$k.md" >/dev/null; done; cat ctx/c-*.md > ctx/context.md
+  python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null
   ACC=$(python3 -I "$R/pick-account.py" "${ACCOUNT:-auto}" 2>/dev/null)
   TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_${ACC:-1}"
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
-    prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket: $KEY. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
+    prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
     step "$N" "Claude bắt đầu QC"
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!

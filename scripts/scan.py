@@ -73,6 +73,54 @@ def link(key):
     return f'<a href="{JIRA}/browse/{key}">{key}</a>'
 
 
+def group_key(k, f):
+    """Same parent story, else the same bracket tags at the start of the summary (one QC pass)."""
+    links = get(f"{JIRA}/rest/api/3/issue/{k}?fields=issuelinks")["fields"]["issuelinks"]
+    parent = next((l["inwardIssue"]["key"] for l in links if l["type"]["name"] == "Parent - Child" and "inwardIssue" in l), None)
+    if parent:
+        return f"story {parent}"
+    tags = re.findall(r"\[([^\]]+)\]", f["summary"])
+    return "nhãn " + "".join(f"[{t}]" for t in tags[:5]) if len(tags) >= 2 else f"ticket {k}"
+
+
+def auto_start(items):
+    """Group new tasks / bugs / QC send-backs, open one task per group in the private repo and start the runner."""
+    gh = {"Authorization": f"Bearer {ENV['TASKS_PAT']}", "Accept": "application/vnd.github+json"}
+    busy = {m for i in get(f"https://api.github.com/repos/{ENV['TASKS_REPO']}/issues?state=open&per_page=100", gh)
+            for m in re.findall(r"(?:US|UTD|UOB)-\d+", i["title"] + " " + (i.get("body") or "")) if "done" not in [x["name"] for x in i["labels"]]}
+    groups = {}
+    for f, k in items:
+        if k in busy or "[api]" in f["summary"].lower() or "[web" in f["summary"].lower():
+            continue  # already being worked on / not an app ticket
+        groups.setdefault(group_key(k, f), []).append((f, k))
+    started = []  # (task number, [(fields, key)], why)
+    proj = urllib.parse.quote(ENV["GITLAB_PROJECT"], safe="")
+    for why, members in groups.items():
+        keys = [k for _, k in members][:4]
+        mine = []
+        for k in keys:
+            br = get(f"https://gitlab.com/api/v4/projects/{proj}/repository/branches?search={k}&per_page=20", {"PRIVATE-TOKEN": ENV["GITLAB_TOKEN"]})
+            mine += [b["name"] for b in br if "/percy/" in b["name"] and not b["name"].startswith("runner/")]
+        bug = any(f["issuetype"]["name"] == "Bug" or f["status"]["name"].lower() in BACK for f, _ in members)
+        branch = mine[0] if mine else f"{'fixbug' if bug else 'feature'}/percy/{'-'.join(keys)}"
+        title = f"{' '.join(keys)} {members[0][0]['summary']}"[:200]
+        body = (f"branch: {branch}\n" + "\n".join(f"jira: {JIRA}/browse/{k}" for k in keys)
+                + f"\n\n## Ghi chú\nTự giao bởi bộ quét ({why}). Làm theo Jira, so Figma, verify/jest, QC iOS/Android.\n")
+        n = post(f"https://api.github.com/repos/{ENV['TASKS_REPO']}/issues", gh, {"title": title, "body": body, "labels": ["todo"]})["number"]
+        post(f"https://api.github.com/repos/{ENV['GITHUB_REPOSITORY']}/actions/workflows/ticket.yml/dispatches",
+             {"Authorization": f"Bearer {ENV['DISPATCH_TOKEN']}", "Accept": "application/vnd.github+json"},
+             {"ref": "main", "inputs": {"issue": str(n)}})
+        started.append((n, members[:4], why))
+    return started
+
+
+def post(url, headers, payload):
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={**headers, "Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        body = r.read()
+    return json.loads(body) if body else {}
+
+
 def main():
     try:
         st = json.load(open(STATE))
@@ -108,8 +156,16 @@ def main():
             out.append((f, k, f'🔔 <b>{esc(c["author"]["displayName"])}</b> tag bạn · '
                               f'<a href="{JIRA}/browse/{k}?focusedCommentId={c["id"]}">{k}</a>\n{esc(t[:300])}', False))
 
-    for f, k, text, buttons in out:
-        send(f, k, text, buttons)
+    started = auto_start([(f, k) for f, k, _, b in out if b]) if ENV.get("TASKS_PAT") and not first else []
+    grouped = {k for _, members, _ in started for _, k in members}
+    for f, k, text, _ in out:
+        if k not in grouped:  # started ones are reported once per group below
+            send(f, k, text, False)
+    for n, members, why in started:
+        send(members[0][0], members[0][1], f"🚀 <b>Tự giao runner</b> · task #{n}\n"
+             + "\n".join(f"• {link(k)} {esc(f['summary'])}" for f, k in members)
+             + (f"\n<i>gom vì cùng {esc(why)}</i>" if len(members) > 1 else "")
+             + "\n<i>Làm code → test iOS/Android → báo cáo vào đây.</i>", False)
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     json.dump({"seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
                "at": dt.datetime.now().isoformat()}, open(STATE, "w"))
