@@ -44,6 +44,22 @@ reset_device() {  # back to light / LTR / English between tasks
 
 label() { gh api -X "$1" "repos/$TASKS_REPO/issues/$2/labels${3:+/$3}" ${4:+-f "labels[]=$4"} >/dev/null 2>&1; }
 
+send_report() {  # <issue> <reported|reported-partial>: merged report of whatever platforms have results
+  local n="$1" mark="$2" key
+  cd "$W"; rm -rf qc out; mkdir -p qc ctx/figma
+  key=$(gh api "repos/$TASKS_REPO/issues/$n" --jq .title | grep -oE '(US|UTD|UOB)-[0-9]+' | head -1)
+  echo "::add-mask::$key"
+  [ -s ctx/context.md ] && [ "${KEY:-}" = "$key" ] || { python3 -I "$R/ticket-context.py" "$key" ctx/context.md >/dev/null; rm -f ctx/figma/*; python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null; }
+  for p in ios android; do python3 -I "$R/task-files.py" get "$n" "$p" "qc/$p" >/dev/null; done
+  local tag=""; [ "$mark" = reported-partial ] && tag=" (một phần: $O chưa test, hết ca)"
+  python3 -I "$R/merge-report.py" "$key · QC iOS + Android · task #$n$tag" ctx/figma qc "$n" out >/dev/null
+  gh api -X POST "repos/$TASKS_REPO/issues/$n/comments" -F body=@out/comment.md >/dev/null
+  python3 -I "$R/tg-report.py" out/telegram.md ctx/context.md "$key · QC · task #$n$tag" >/dev/null
+  python3 -I "$R/tg-doc.py" out/report.html ctx/context.md "$key · so sánh Figma | iOS | Android (mở file HTML)" >/dev/null
+  label DELETE "$n" "reported-partial"; label POST "$n" "" "$mark"
+  rm -rf qc out
+}
+
 # --- warm up
 gl clone -q --depth 200 --branch app-develop "$REPO_URL" app && cd app
 yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
@@ -97,15 +113,12 @@ while [ "$(date +%s)" -lt "$END" ]; do
   label DELETE "$N" "$P-running"; label POST "$N" "" "$P-done"
   # Whoever finishes last (or alone) sends the merged report.
   LABELS=$(gh api "repos/$TASKS_REPO/issues/$N" --jq '[.labels[].name] | join(",")')
-  if ! grep -qE "(^|,)($O-todo|$O-running|reported)(,|$)" <<<"$LABELS"; then
-    label POST "$N" "" "reported"
-    mkdir -p qc; for p in ios android; do python3 -I "$R/task-files.py" get "$N" "$p" "qc/$p" >/dev/null; done
-    python3 -I "$R/merge-report.py" "$KEY · QC iOS + Android · task #$N" ctx/figma qc "$N" out >/dev/null
-    gh api -X POST "repos/$TASKS_REPO/issues/$N/comments" -F body=@out/comment.md >/dev/null
-    python3 -I "$R/tg-report.py" out/telegram.md ctx/context.md "$KEY · QC iOS + Android · task #$N" >/dev/null
-    python3 -I "$R/tg-doc.py" out/report.html ctx/context.md "$KEY · so sánh Figma | iOS | Android (mở file HTML)" >/dev/null
-    rm -rf qc out
-  fi
+  grep -qE "(^|,)($O-todo|$O-running|reported)(,|$)" <<<"$LABELS" || send_report "$N" reported
   DONE=$((DONE + 1)); log "task done ($DONE this shift)"
+done
+# Shift over: tasks this platform finished while the other is still queued get a partial report now;
+# the other platform sends the full one when it gets to them (label reported-partial -> reported).
+for n in $(gh api "repos/$TASKS_REPO/issues?labels=$P-done&state=open&per_page=50" --jq '.[] | select([.labels[].name] | (index("reported") or index("reported-partial")) | not) | .number' 2>/dev/null); do
+  send_report "$n" reported-partial
 done
 log "shift over: $DONE tasks"
