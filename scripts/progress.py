@@ -10,7 +10,8 @@ try:
     url = f"https://api.github.com/repos/{os.environ['TASKS_REPO']}/contents/progress/issue-{issue}-{plat}.json"
     H = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"}
     body = {"message": f"progress #{issue} {plat}",
-            "content": base64.b64encode(json.dumps({"step": text, "at": datetime.datetime.utcnow().isoformat() + "Z"},
+            "content": base64.b64encode(json.dumps({"step": text, "at": datetime.datetime.utcnow().isoformat() + "Z",
+                                                    "worker": f"{plat}-{os.environ.get('WORKER') or 1}"},
                                                    ensure_ascii=False).encode()).decode()}
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=20) as r:
