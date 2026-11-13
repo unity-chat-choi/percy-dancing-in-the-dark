@@ -133,6 +133,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_${ACC:-1}"
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
+    python3 -I "$R/lessons.py" get ctx/lessons.md >/dev/null
     step "$N" "Claude bắt đầu QC"
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
@@ -143,6 +144,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
   fi
   kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
+  python3 -I "$R/lessons.py" add ctx/lessons-new.md 2>/dev/null || true
   step "$N" "Lưu kết quả QC"
   bash "$R/qc-report.sh" "$P" "shift"
   label DELETE "$N" "$P-running"; label POST "$N" "" "$P-done"

@@ -14,10 +14,17 @@ Build the test list first, in this order:
 3. Requirement: the ticket/story acceptance criteria, Confluence spec and the latest PO/BA comments (newer comments override older text).
 4. Figma: every frame.
 
-App facts (learned on earlier runs):
-- On first launch coach-mark tooltips (e.g. "Odds setting") cover the screen and block scrolling: tap the tooltip / outside it until none is left, before anything else.
-- Theme and language are APP settings (Profile → Settings → Theme / Language), not the OS ones: switch light/dark and Arabic (RTL) there; the OS commands below are only a fallback.
-- If a screen shows "Data not available", check the device network log / call the API before blaming the ticket: on a fresh install Remote Config may not have arrived yet and some endpoints fall back to the wrong API version.
+Rulebook: read ../ctx/lessons.md FIRST. It holds what blocked earlier runs and how it was solved; apply it.
+
+"Không test được" is the last resort. When something blocks you, work through this ladder and note each attempt:
+1. Dismiss overlays (coach marks, tooltips, dialogs), restart the app, wait for loading / Remote Config.
+2. Change the setting inside the app (theme, language, region) instead of the OS.
+3. Find other data that covers the case: another league, season, team, match; read the API to pick one.
+4. Reach the screen another way: deeplink, search, a different navigation path, a Maestro flow.
+5. Find the cause: device/network log, call the API directly. If the app itself is wrong (wrong endpoint, crash, missing data handling), that is a FAIL with a bug — report it as a bug, not as "không test được".
+Only after all of that may a case be "Không test được", with the attempts listed.
+
+Lessons: at the end write ../ctx/lessons-new.md, one line per lesson starting with "- ", in Vietnamese: what blocked you and the exact fix that worked (or what is still needed). Only new, reusable lessons; no ticket-specific results.
 
 For every screen in scope check three modes and screenshot each into ../shots/ (max 12 files, `<n>-<screen>-<light|dark|rtl>.png`):
 - Light, Dark and RTL — the commands for each are under "Platform". If the app keeps its own language setting, change it in the app's settings instead.

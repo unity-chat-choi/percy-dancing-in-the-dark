@@ -303,6 +303,10 @@ jobs:
           n=$(python3 -I runner/scripts/pick-account.py "${{ inputs.account }}") || { echo "no Claude account has quota left"; exit 1; }
           echo "n=$n" >> "$GITHUB_OUTPUT"; echo "using account $n"
 
+      - name: rulebook
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/lessons.py get ctx/lessons.md
+
       - name: qc
         working-directory: app
         env:
@@ -315,6 +319,11 @@ jobs:
             --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
             > ../ctx/qc.json 2>/dev/null || echo "claude exited non-zero"
           echo "shots: $(ls ../shots | wc -l)"
+
+      - name: learn
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
 
       - name: store result
         if: ${{ !cancelled() }}
@@ -412,6 +421,10 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
+      - name: rulebook
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/lessons.py get ctx/lessons.md
+
       - name: emulator + qc
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -425,6 +438,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash runner/scripts/android-qc.sh
+
+      - name: learn
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
 
       - name: store result
         if: ${{ !cancelled() }}
