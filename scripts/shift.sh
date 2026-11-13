@@ -23,7 +23,7 @@ build_app() {  # full or incremental build + install
     xcrun simctl install booted "$APP"
     APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
   else
-    (cd android && ENVFILE=.env.staging ./gradlew :app:assembleStagingDebug -PreactNativeArchitectures=x86_64 \
+    (cd android && ENVFILE=.env.staging ./gradlew :app:assembleStagingDebug \
       --build-cache -q >/tmp/build.log 2>&1) || { log "android build failed"; return 1; }
     adb install -r "$(ls android/app/build/outputs/apk/staging/debug/*.apk | head -1)" >/dev/null
     APP_ID=com.unity.uniscore.stag
@@ -88,7 +88,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket: $KEY. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
-    (cd app && timeout 5400 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
+    (cd app && perl -e 'alarm shift; exec @ARGV' 5400 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
       CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$prompt" --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
       --add-dir ../ctx --add-dir ../shots --output-format json \
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true

@@ -112,7 +112,7 @@ jobs:
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           before=$(git rev-parse HEAD)
           prompt="$(cat ../runner/prompts/ticket.md)"$'\n\n'"Ticket: $KEY. Branch: $BRANCH. Task notes from the developer (follow them): ../ctx/task.md"
-          timeout 7800 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
+          perl -e 'alarm shift; exec @ARGV' 7800 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --output-format json \
             --disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch \
             > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
@@ -279,7 +279,7 @@ jobs:
         run: |
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-ios.md)"$'\n\n'"Ticket: $KEY."
-          timeout 5400 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
+          perl -e 'alarm shift; exec @ARGV' 5400 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --add-dir ../shots --output-format json \
             --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
             > ../ctx/qc.json 2>/dev/null || echo "claude exited non-zero"
@@ -353,9 +353,9 @@ jobs:
         working-directory: app/android
         env: { ENVFILE: .env.staging }
         run: |
-          # The team ships ARM only; the emulator is x86_64, so add that ABI for this build.
+          # ARM-only APK like the team ships (abiFilters); the x86_64 emulator runs it through ARM translation.
           set -o pipefail
-          ./gradlew :app:assembleStagingRelease -PreactNativeArchitectures=x86_64 --no-daemon -q > /tmp/build.log 2>&1 \
+          ./gradlew :app:assembleStagingRelease --no-daemon -q > /tmp/build.log 2>&1 \
             && echo "build ok" || {
               echo "build failed"
               { grep -E '^e: |error:|FAILURE|What went wrong' -A3 /tmp/build.log | head -40; } > ../../ctx/build-errors.txt
