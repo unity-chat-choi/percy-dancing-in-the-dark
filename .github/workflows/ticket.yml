@@ -260,8 +260,15 @@ jobs:
           if [ ! -s ctx/ios-report.md ]; then
             { echo "## Kết quả: CHƯA TEST ĐƯỢC"; echo; [ -s ctx/build-errors.txt ] && { echo "Build iOS lỗi:"; cat ctx/build-errors.txt; } || echo "Bước iOS dừng trước khi QC xong (${{ job.status }})."; } > ctx/ios-report.md
           fi
-          gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@ctx/ios-report.md >/dev/null
           python3 -I runner/scripts/tg-report.py ctx/ios-report.md ctx/context.md "$KEY · test iOS simulator · task #$ISSUE"
+          # Screenshots go into the private task repo and show inside the task comment (also used for the Jira comment).
+          if ls shots/*.png >/dev/null 2>&1; then
+            { echo; echo "### Ảnh app iOS (staging)"; python3 -I runner/scripts/task-images.py "$ISSUE" shots/*.png; } >> ctx/ios-report.md
+          fi
+          if ls ctx/figma/*.png >/dev/null 2>&1; then
+            { echo; echo "### Figma"; python3 -I runner/scripts/task-images.py "$ISSUE" ctx/figma/*.png; } >> ctx/ios-report.md
+          fi
+          gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@ctx/ios-report.md >/dev/null
           files=$(ls ctx/figma/*.png shots/*.png 2>/dev/null)
           [ -n "$files" ] && python3 -I runner/scripts/tg-photos.py ctx/context.md "$KEY · Figma (ảnh đầu) và app iOS staging" $files || true
 
