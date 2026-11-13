@@ -74,7 +74,23 @@ if [ "$P" = ios ]; then
   (cd ios && bundle install --quiet >/dev/null 2>&1)
 fi
 (npx react-native start --port 8081 >/tmp/metro.log 2>&1 &)
-build_app || exit 1
+alert() {  # private Telegram group (General): build broken on app-develop, etc.
+  python3 -I - "$1" <<'PYA'
+import json, os, sys, urllib.request
+msg = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "text": sys.argv[1][:3900], "disable_web_page_preview": True}
+urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
+                       data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"}), timeout=20)
+PYA
+}
+if ! build_app; then
+  # One alert per shift and platform (worker 1 only): app-develop itself does not build.
+  if [ "${WORKER:-1}" = 1 ]; then
+    errs=$( { grep -E ' error: |^e: |error:|What went wrong' -A2 /tmp/build.log | head -25; } 2>/dev/null )
+    alert "⚠️ app-develop build lỗi trên máy $P lúc khởi động ca ($(git log -1 --format='%h %an: %s' 2>/dev/null)).
+$errs"
+  fi
+  exit 1
+fi
 curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; export PATH="$HOME/.maestro/bin:$PATH"
 npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
 BASE=$(git rev-parse HEAD); DONE=0
