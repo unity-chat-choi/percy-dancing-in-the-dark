@@ -38,6 +38,11 @@ if [ "$(uname)" = Darwin ]; then
   sed "s#__REPO__#$repo#" "$repo/mac/com.percy.retro.plist" > "$plist"
   launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$plist" && echo "launchd com.percy.retro ok"
+  # Scheduler: GitHub cron is unreliable, so the Mac dispatches shifts/daily/poll every 5 min.
+  plist="$HOME/Library/LaunchAgents/com.percy.trigger.plist"
+  sed "s#__REPO__#$repo#" "$repo/mac/com.percy.trigger.plist" > "$plist"
+  launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$plist" && echo "launchd com.percy.trigger ok"
   # Q&A bot (topic 💬 Hỏi đáp), always on. Needs `claude` logged in and ~/uniscore-mobile cloned.
   plist="$HOME/Library/LaunchAgents/com.percy.ask-bot.plist"
   sed -e "s#__REPO__#$repo#" -e "s#__HOME__#$HOME#" "$repo/mac/com.percy.ask-bot.plist" > "$plist"

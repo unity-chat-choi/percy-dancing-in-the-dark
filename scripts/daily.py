@@ -374,6 +374,13 @@ if env("RETRY") == "1":
         tg(f"📋 <b>Daily {tab}</b>: {sheet_note} (lần 10h)", next(iter(TOPICS.values()), None))
     sys.exit(0)
 
+# One report per day: the Mac trigger and the GitHub cron may both fire.
+if env("DRYRUN") != "1" and not env("DATE") and state.get("report_date") == tab_name(today):
+    print("report already sent today")
+    save_state()
+    sys.exit(0)
+state["report_date"] = tab_name(today) if env("DRYRUN") != "1" else state.get("report_date")
+
 # --- Report: one message per squad, sent to that squad's topic
 LABEL = {"in progress": "🟡 đang làm", "fixing": "🟠 đang sửa", "review fail": "🟠 review fail",
          "to do": "⚪ chưa làm", "open": "⚪ chưa làm", "review code": "🔵 chờ review"}

@@ -11,6 +11,10 @@ on:
         description: "Chỉ gửi bản xem trước qua Telegram, không ghi sheet"
         type: boolean
         default: true
+      poll:
+        description: "Only handle Telegram buttons / reactions (what the 5-min schedule does)"
+        type: boolean
+        default: false
   # 09:00 Vietnam time Mon–Fri; 10:00 retry in case the day's tab (made by someone else) was late.
   schedule:
     - cron: "0 2 * * 1-5"
@@ -29,7 +33,7 @@ jobs:
     timeout-minutes: 5
     if: github.event_name == 'workflow_dispatch' || vars.DAILY_ENABLED == 'true'
     env:
-      REACT_ONLY: ${{ github.event.schedule == '*/5 * * * *' && '1' || '' }}
+      REACT_ONLY: ${{ (github.event.schedule == '*/5 * * * *' || inputs.poll) && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
       # Public repo: the script prints counts only; content goes to Percy's private Telegram group.
