@@ -14,4 +14,6 @@ if [ "$DOW" -le 5 ]; then
   if [ "$H" -ge 0900 ] && [ "$H" -lt 1100 ] && once daily; then gh workflow run daily.yml -R "$R" -f dryrun=false; fi
 fi
 gh workflow run daily.yml -R "$R" -f poll=true -f dryrun=false >/dev/null 2>&1
+# Rule-based Jira watcher (no LLM): new tasks/bugs, QC send-backs, @mentions → Telegram with ▶️ buttons.
+python3 -I "$(dirname "$0")/scan.py" || true
 find "$M" -type f -mtime +7 -delete

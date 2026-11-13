@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write  # commit state/daily-state.json (hashed ids only)
+  actions: write   # ▶️ button starts the ticket workflow
 
 concurrency: daily
 
@@ -53,6 +54,9 @@ jobs:
           CHAT_WEBHOOKS: ${{ secrets.CHAT_WEBHOOKS }}
           CHAT_MEMBERS: ${{ secrets.CHAT_MEMBERS }}
           JIRA_MEMBERS: ${{ secrets.JIRA_MEMBERS }}
+          TASKS_PAT: ${{ secrets.TASKS_PAT }}
+          TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          DISPATCH_TOKEN: ${{ github.token }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
           OFF_DAYS: ${{ vars.OFF_DAYS }}
           DATE: ${{ inputs.date }}

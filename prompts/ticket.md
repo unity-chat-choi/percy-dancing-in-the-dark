@@ -3,7 +3,7 @@ You are finishing a ticket for the uniscore-mobile React Native app on a CI runn
 Inputs (outside the repo, read them first):
 - ../ctx/context.md — the Jira ticket, parent story, sibling tickets ([API] etc.), all comments and the full Confluence specs. Read ALL of it, including Out of scope, open questions and the latest comments, before deciding anything.
 - ../ctx/figma/*.png — the Figma frames linked in the ticket. Open each with the Read tool.
-- The current branch already holds the developer's WIP: inspect `git log origin/app-develop..HEAD` and `git diff origin/app-develop...HEAD`.
+- The current branch may already hold the developer's WIP: inspect `git log origin/app-develop..HEAD` and `git diff origin/app-develop...HEAD`. If it has none, implement the ticket from scratch.
 
 Rules:
 - Follow the repo's AGENTS.md and CLAUDE.md (house components, theme tokens, i18n in all 33 translation files, no `any`, one export per file, English comments). Read docs/ai/pitfalls.md and grep docs/ai/bugs/ for the area you touch.

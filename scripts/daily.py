@@ -154,6 +154,34 @@ def send_draft(text):
     return link
 
 
+def start_task(key):
+    """▶️ from the scanner: open a task in the private repo for this Jira key and start the ticket workflow."""
+    jauth = {"Authorization": "Basic " + base64.b64encode(f"{env('JIRA_EMAIL')}:{env('JIRA_API_TOKEN')}".encode()).decode(),
+             "Accept": "application/json"}
+    f = http(f"{env('JIRA_URL').rstrip('/')}/rest/api/3/issue/{key}?fields=summary,issuetype", jauth)["fields"]
+    gh = {"Authorization": f"Bearer {env('TASKS_PAT')}", "Accept": "application/vnd.github+json"}
+    open_tasks = http(f"https://api.github.com/repos/{env('TASKS_REPO')}/issues?state=open&per_page=100", gh)
+    old = next((i for i in open_tasks if i["title"].startswith(key + " ")), None)
+    if old:
+        n = old["number"]
+    else:
+        # Reuse my existing GitLab branch for the ticket, else a new one cut from app-develop by the runner.
+        proj = urllib.parse.quote(env("GITLAB_PROJECT"), safe="")
+        found = http(f"https://gitlab.com/api/v4/projects/{proj}/repository/branches?search={key}&per_page=20",
+                     {"PRIVATE-TOKEN": env("GITLAB_TOKEN")})
+        mine = [b["name"] for b in found if "/percy/" in b["name"] and not b["name"].startswith("runner/")]
+        prefix = "fixbug" if f["issuetype"]["name"] == "Bug" else "feature"
+        branch = mine[0] if mine else f"{prefix}/percy/{key}"
+        body = (f"branch: {branch}\njira: {env('JIRA_URL').rstrip('/')}/browse/{key}\n\n## Ghi chú\n"
+                f"Giao từ Telegram. Làm ticket theo Jira (nhánh {'có sẵn WIP' if mine else 'mới từ app-develop'}), so Figma, verify/jest, QC.\n")
+        n = http(f"https://api.github.com/repos/{env('TASKS_REPO')}/issues", gh,
+                 json.dumps({"title": f"{key} {f['summary']}", "body": body, "labels": ["todo"]}).encode(), "POST")["number"]
+    http(f"https://api.github.com/repos/{env('GITHUB_REPOSITORY')}/actions/workflows/ticket.yml/dispatches",
+         {"Authorization": f"Bearer {env('DISPATCH_TOKEN')}", "Accept": "application/vnd.github+json"},
+         json.dumps({"ref": "main", "inputs": {"issue": str(n)}}).encode(), "POST")
+    return n
+
+
 def handle_callback(bot, cb):
     msg = cb.get("message") or {}
     if str((msg.get("chat") or {}).get("id")) != str(env("TG_NOTIFY_CHAT_ID")) or cb["from"].get("is_bot"):
@@ -161,9 +189,15 @@ def handle_callback(bot, cb):
     api = f"https://api.telegram.org/bot{bot}"
     text, now = msg.get("text", ""), dt.datetime.now(VN).strftime("%H:%M %d/%m")
     try:
-        if cb.get("data") == "send":
+        data = cb.get("data") or ""
+        if data == "send":
             link = send_draft(text)
             note, toast = f"✅ Đã gửi {now}\n{link}", "Đã gửi"
+        elif data.startswith("run:"):
+            n = start_task(data[4:])
+            note, toast = f"▶️ Đã giao runner {now} · task #{n}", "Đã giao runner"
+        elif data.startswith("skip:"):
+            note, toast = f"👀 Để sau ({now})", "Để sau"
         else:
             note, toast = f"❌ Đã bỏ {now}", "Đã bỏ"
     except Exception as e:  # keep the buttons so Percy can retry

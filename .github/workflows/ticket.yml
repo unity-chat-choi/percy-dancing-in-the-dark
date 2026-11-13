@@ -71,7 +71,12 @@ jobs:
           GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
         run: |
           auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 -w0)"
-          git -c http.extraHeader="$auth" clone -q --depth 60 --branch "$BRANCH" "https://gitlab.com/$GITLAB_PROJECT.git" app
+          if git -c http.extraHeader="$auth" clone -q --depth 60 --branch "$BRANCH" "https://gitlab.com/$GITLAB_PROJECT.git" app 2>/dev/null; then
+            echo "BASE_REF=origin/$BRANCH" >> "$GITHUB_ENV"
+          else  # new ticket: cut the branch from app-develop; the runner's work lands on runner/<branch>
+            git -c http.extraHeader="$auth" clone -q --depth 60 --branch app-develop "https://gitlab.com/$GITLAB_PROJECT.git" app
+            git -C app checkout -q -b "$BRANCH"; echo "BASE_REF=origin/app-develop" >> "$GITHUB_ENV"; echo "new branch from app-develop"
+          fi
           git -C app -c http.extraHeader="$auth" fetch -q --depth 200 origin app-develop:refs/remotes/origin/app-develop
           git -C app config user.name "percy (runner)"
           git -C app config user.email 62367533+nguyenphp@users.noreply.github.com
@@ -141,7 +146,7 @@ jobs:
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
-          [ "$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)" = 0 ] && { echo "nothing to push"; exit 0; }
+          [ "$(git rev-list --count "${BASE_REF:-origin/$BRANCH}..HEAD" 2>/dev/null || echo 0)" = 0 ] && { echo "nothing to push"; exit 0; }
           auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 -w0)"
           # The developer's branch is never touched: work lands on runner/<branch> for review.
           git -c http.extraHeader="$auth" push -q --force origin "HEAD:refs/heads/runner/$BRANCH" && echo "PUSHED=1" >> "$GITHUB_ENV" && echo "pushed runner branch"
