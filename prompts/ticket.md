@@ -7,6 +7,7 @@ Inputs (outside the repo, read them first):
 
 Rules:
 - Follow the repo's AGENTS.md and CLAUDE.md (house components, theme tokens, i18n in all 33 translation files, no `any`, one export per file, English comments). Read docs/ai/pitfalls.md and grep docs/ai/bugs/ for the area you touch.
+- If ../ctx/task.md has a "## Bug QC cần sửa" section, this is a fix round: fix exactly those bugs (scope ticket/blocking) first, minimal and safe, then re-verify. Bugs there come from QC on device with screenshots.
 - Finish what the ticket and the WIP aim at. Do not start unrelated work. If the spec is unclear or the API is missing, do not guess: list it under "Cần confirm".
 - Compare the UI code with every Figma frame: layout, spacing, sizes, colours (theme tokens), fonts, texts, empty/loading states. Fix real differences.
 - Check the code also holds in dark mode (theme tokens, no hard-coded colours) and RTL (row direction, flipped arrows, text alignment).

@@ -45,4 +45,44 @@ urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.
                        data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"}), timeout=20)
 PYA
 fi
+# QC found bugs in this ticket (or bugs that block it): open a fix round on the runner branch, then QC again (max 2 rounds).
+python3 -I - "$ISSUE" "$P" "${RUNNER_REPO:-unity-chat-choi/percy-dancing-in-the-dark}" <<'PYB' || true
+import json, os, sys, urllib.request
+n, p, runner = sys.argv[1:4]
+v = json.load(open("ctx/verdict.json"))
+fix = [b for b in v.get("bugs") or [] if b.get("scope") in ("ticket", "blocking")]
+other = [b for b in v.get("bugs") or [] if b.get("scope") == "other"]
+H = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json", "Content-Type": "application/json"}
+api = lambda path, data=None, method=None: json.load(urllib.request.urlopen(urllib.request.Request(
+    f"https://api.github.com{path}", data=json.dumps(data).encode() if data is not None else None, headers=H, method=method), timeout=30) or [None])
+def tg(text):
+    m = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "text": text[:3900], "disable_web_page_preview": True}
+    urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
+                           data=json.dumps(m).encode(), headers={"Content-Type": "application/json"}), timeout=20)
+repo = os.environ["TASKS_REPO"]
+issue = api(f"/repos/{repo}/issues/{n}")
+labels = [l["name"] for l in issue["labels"]]
+key = os.environ.get("KEY", "")
+if other:
+    tg(f"🐞 QC {p} thấy bug NGOÀI ticket ({key}, task #{n}) — cần ticket Jira riêng nếu muốn sửa:\n" + "\n".join(f"• {b['title']} ({b.get('where','')})" for b in other))
+if v.get("result") != "FAIL" or not fix:
+    sys.exit(0)
+rounds = sum(1 for l in labels if l.startswith("fix-round-"))
+if rounds >= 2:
+    tg(f"⛔ {key} · task #{n}: đã sửa 2 vòng mà QC {p} vẫn còn bug, cần anh xem.\n" + "\n".join(f"• {b['title']}" for b in fix)); sys.exit(0)
+mark = f"fix-round-{rounds + 1}"
+if mark in labels:
+    sys.exit(0)  # the other platform already opened this round
+api(f"/repos/{repo}/issues/{n}/labels", {"labels": [mark]}, "POST")
+body = (issue.get("body") or "") + f"\n\n## Bug QC cần sửa (vòng {rounds + 1}, từ {p})\n" + "\n".join(
+    f"- [{b['scope']}] {b['title']} — {b.get('where','')}: {b.get('detail','')}" for b in fix)
+api(f"/repos/{repo}/issues/{n}", {"body": body}, "PATCH")
+for q in ("ios", "android"):  # both platforms test again after the fix
+    for l in (f"{q}-done", f"{q}-todo"):
+        try: api(f"/repos/{repo}/issues/{n}/labels/{l}", method="DELETE")
+        except Exception: pass
+api(f"/repos/{runner}/actions/workflows/ticket.yml/dispatches", {"ref": "main", "inputs": {"issue": str(n)}}, "POST")
+tg(f"🔧 {key} · task #{n}: QC {p} thấy {len(fix)} bug của ticket → runner đang sửa (vòng {rounds + 1}), xong sẽ QC lại cả iOS + Android.\n" + "\n".join(f"• {b['title']}" for b in fix))
+open("ctx/qc-status", "w").write("fixing")
+PYB
 echo "qc $P: $(cat ctx/qc-status)"

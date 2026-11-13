@@ -37,7 +37,9 @@ Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
 Same data on both platforms: if ../ctx/peer-test-data.json exists, the other platform already tested with that data (league, season, team, match, screens): use EXACTLY the same data so iOS and Android can be compared. Always write ../ctx/test-data.json with the data you used: {"screens":[{"name":"...","how":"deeplink/navigation","data":{"league":"id/name","season":"...","other":"..."}}]}.
 
 Definition of done (the worker decides with this file, write it last): ../ctx/verdict.json
-{"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>"}
+{"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>",
+ "bugs":[{"title":"<short>","scope":"ticket|blocking|other","where":"<file/screen>","detail":"<steps, expected vs actual, screenshot name>"}]}
+- scope: "ticket" = this ticket's own change is wrong; "blocking" = an app bug that stops this ticket from working/being tested (e.g. wrong API version for its screen); "other" = unrelated area. Bugs with scope ticket/blocking are fixed automatically in the next round, so describe them precisely.
 - PASS = every case checked in light, dark and RTL and matches Figma + requirement. FAIL = checked, and you found bugs (listed in the report).
 - A mode you could not reach is false, and then result must be BLOCKED: the task goes back to the queue and the next run continues from your lessons. Never mark PASS/FAIL with a mode missing.
 

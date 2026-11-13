@@ -152,6 +152,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   case "$(cat ctx/qc-status 2>/dev/null)" in
     done) step "$N" "Xong $P (đủ light/dark/RTL)";;
     retry) step "$N" "Chưa xong $P, xếp hàng thử lại";;
+    fixing) step "$N" "QC thấy bug → runner đang sửa, sẽ QC lại";;
     *) step "$N" "Kẹt $P sau 3 lần, đã báo anh";;
   esac
   gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1  # free the claim for a later re-test
