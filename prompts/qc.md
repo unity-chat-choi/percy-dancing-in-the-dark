@@ -14,6 +14,11 @@ Build the test list first, in this order:
 3. Requirement: the ticket/story acceptance criteria, Confluence spec and the latest PO/BA comments (newer comments override older text).
 4. Figma: every frame.
 
+App facts (learned on earlier runs):
+- On first launch coach-mark tooltips (e.g. "Odds setting") cover the screen and block scrolling: tap the tooltip / outside it until none is left, before anything else.
+- Theme and language are APP settings (Profile → Settings → Theme / Language), not the OS ones: switch light/dark and Arabic (RTL) there; the OS commands below are only a fallback.
+- If a screen shows "Data not available", check the device network log / call the API before blaming the ticket: on a fresh install Remote Config may not have arrived yet and some endpoints fall back to the wrong API version.
+
 For every screen in scope check three modes and screenshot each into ../shots/ (max 12 files, `<n>-<screen>-<light|dark|rtl>.png`):
 - Light, Dark and RTL — the commands for each are under "Platform". If the app keeps its own language setting, change it in the app's settings instead.
 Open each screenshot with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
