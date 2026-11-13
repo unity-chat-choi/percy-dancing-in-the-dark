@@ -152,7 +152,8 @@ jobs:
   ios:
     needs: work
     if: ${{ !cancelled() && inputs.ios }}
-    runs-on: macos-15
+    # Prebuilt pods (Braze…) need the Swift 6.2+ runtime, i.e. Xcode 26+; the team builds with Xcode 27.
+    runs-on: macos-26
     timeout-minutes: 150
     defaults: { run: { shell: bash } }
     env:
@@ -208,7 +209,8 @@ jobs:
       - name: build
         working-directory: app/ios
         run: |
-          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)" >/dev/null
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)" >/dev/null
+          echo "$(xcodebuild -version | head -1)"
           set -o pipefail
           xcodebuild -workspace uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build \
@@ -224,7 +226,7 @@ jobs:
       - name: simulator
         run: |
           app=$(ls -d build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
-          udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if 'iPhone 16 Pro' == x['name']))")
+          udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if x['name'].startswith('iPhone') and x['name'].endswith('Pro')))")
           xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b >/dev/null
           xcrun simctl install booted "$app"
           echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
