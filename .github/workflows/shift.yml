@@ -15,7 +15,8 @@ on:
 permissions: {}
 
 concurrency:
-  group: shift
+  # Scheduled shifts never overlap; a manual shift (extra machines) gets its own group.
+  group: shift-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.schedule }}
   cancel-in-progress: false
 
 env:
