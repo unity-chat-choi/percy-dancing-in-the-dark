@@ -9,15 +9,20 @@ Each report goes to the ticket's squad topic with buttons: ▶️ Giao runner l�
 The daily poll handles the buttons. First run only records the current state (no flood).
 Reads ~/.config/cutcut/uniscore-runner-secrets.env. LOCAL=1 prints instead of sending.
 """
-import base64, datetime as dt, json, os, re, urllib.parse, urllib.request
+import base64, datetime as dt, hashlib, json, os, re, urllib.parse, urllib.request
 
 HOME = os.path.expanduser("~")
-ENV = {k: v.strip().strip("'\"") for k, v in (l.split("=", 1) for l in open(
-    f"{HOME}/.config/cutcut/uniscore-runner-secrets.env").read().splitlines() if "=" in l and not l.startswith("#"))}
+if os.environ.get("JIRA_URL"):  # GitHub runner: secrets come in as env
+    ENV = dict(os.environ)
+else:  # Mac
+    ENV = {k: v.strip().strip("'\"") for k, v in (l.split("=", 1) for l in open(
+        f"{HOME}/.config/cutcut/uniscore-runner-secrets.env").read().splitlines() if "=" in l and not l.startswith("#"))}
 JIRA = ENV["JIRA_URL"].rstrip("/")
 AUTH = {"Authorization": "Basic " + base64.b64encode(f"{ENV['JIRA_EMAIL']}:{ENV['JIRA_API_TOKEN']}".encode()).decode(),
         "Accept": "application/json"}
-STATE = f"{HOME}/.cache/percy-scan/state.json"
+STATE = os.environ.get("SCAN_STATE") or f"{HOME}/.cache/percy-scan/state.json"
+# In the public runner repo the state is committed, so keys and comment ids are stored only as hashes.
+H = (lambda x: hashlib.sha1(str(x).encode()).hexdigest()[:12]) if os.environ.get("SCAN_HASH") == "1" else str
 MINE = "(assignee = currentUser() OR cf[10075] = currentUser())"
 BACK = {"fixing", "review fail"}
 
@@ -81,22 +86,22 @@ def main():
     for i in jql(f"{MINE} AND (sprint in openSprints() OR type = Bug) AND statusCategory != Done ORDER BY created DESC"):
         k, f = i["key"], i["fields"]
         s, kind = f["status"]["name"], f["issuetype"]["name"]
-        if k not in seen:
-            seen.add(k)
+        if H(k) not in seen:
+            seen.add(H(k))
             if not first:
                 tag = "🐞 <b>Bug mới</b>" if kind == "Bug" else "🆕 <b>Task mới</b>"
                 out.append((f, k, f"{tag} · {link(k)} {esc(f['summary'])}\n<i>{esc(s)} · {esc(team(f) or 'chưa gắn squad')}</i>", True))
-        elif status.get(k) and status[k].lower() != s.lower() and s.lower() in BACK and not first:
-            out.append((f, k, f"↩️ <b>QC trả về</b> · {link(k)} {esc(f['summary'])}\n<i>{esc(status[k])} → {esc(s)}</i>", True))
-        status[k] = s
+        elif status.get(H(k)) and status[H(k)].lower() != s.lower() and s.lower() in BACK and not first:
+            out.append((f, k, f"↩️ <b>QC trả về</b> · {link(k)} {esc(f['summary'])}\n<i>{esc(status[H(k)])} → {esc(s)}</i>", True))
+        status[H(k)] = s
 
     # mentions: comments on my tickets updated in the last hour
     for i in jql(f"{MINE} AND updated >= -60m", "summary,customfield_10001", 30):
         k, f = i["key"], i["fields"]
         for c in get(f"{JIRA}/rest/api/3/issue/{k}/comment?orderBy=-created&maxResults=10").get("comments", []):
-            if c["id"] in comments:
+            if H(c["id"]) in comments:
                 continue
-            comments.add(c["id"])
+            comments.add(H(c["id"]))
             if first or c["author"]["accountId"] == me or me not in json.dumps(c["body"]):
                 continue
             t = re.sub(r"\s+", " ", adf_text(c["body"])).strip()
@@ -108,7 +113,7 @@ def main():
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     json.dump({"seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
                "at": dt.datetime.now().isoformat()}, open(STATE, "w"))
-    print(f"scan: {len(out)} new" + (" (first run: baseline only)" if first else ""))
+    print(f"scan: {len(out)} new" + (" (first run: baseline only)" if first else ""))  # counts only: public log
 
 
 if __name__ == "__main__":
