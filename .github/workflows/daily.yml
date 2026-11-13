@@ -1,4 +1,5 @@
 name: daily
+# Schedules re-register on a push that touches this file (needed after the history squash).
 
 on:
   workflow_dispatch:

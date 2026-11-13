@@ -1,4 +1,5 @@
 name: remind
+# Schedules re-register on a push that touches this file.
 
 on:
   # Manual: Actions → remind → Run workflow

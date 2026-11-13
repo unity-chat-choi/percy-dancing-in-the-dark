@@ -1,4 +1,5 @@
 name: retro
+# Schedules re-register on a push that touches this file.
 
 on:
   workflow_dispatch:
