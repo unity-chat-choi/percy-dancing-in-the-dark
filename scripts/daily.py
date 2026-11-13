@@ -10,7 +10,7 @@ Env: GITLAB_TOKEN GITLAB_PROJECT JIRA_URL JIRA_EMAIL JIRA_API_TOKEN GOOGLE_OAUTH
      REACT_ONLY=1: only handle Telegram updates — ❤ reactions and ✅/❌ draft buttons (Percy hearts an item = handled, never shown again).
 State (state/daily-state.json, committed): hashed item ids only, so the public repo shows no ticket data.
 """
-import base64, datetime as dt, hashlib, json, os, re, sys, urllib.error, urllib.parse, urllib.request
+import base64, datetime as dt, hashlib, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
 SHEET = os.environ.get("DAILY_SHEET_ID", "")
 ROW_NAME, AUTHOR = os.environ.get("DAILY_ROW_NAME", ""), "percy"
@@ -65,8 +65,17 @@ def tg(html, thread=None):
         msg = {"chat_id": env("TG_NOTIFY_CHAT_ID"), "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
         if thread:
             msg["message_thread_id"] = int(thread)
-        mid = http(f"https://api.telegram.org/bot{bot}/sendMessage", {"Content-Type": "application/json"},
-                   json.dumps(msg).encode())["result"]["message_id"]
+        for attempt in range(5):  # group limit ~20 msgs/min: honour 429 retry_after
+            try:
+                mid = http(f"https://api.telegram.org/bot{bot}/sendMessage", {"Content-Type": "application/json"},
+                           json.dumps(msg).encode())["result"]["message_id"]
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 4:
+                    raise
+                wait = json.loads(e.read() or b"{}").get("parameters", {}).get("retry_after", 5)
+                time.sleep(wait + 1)
+        time.sleep(1.2)
     return mid
 
 
