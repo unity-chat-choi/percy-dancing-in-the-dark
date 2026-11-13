@@ -51,6 +51,7 @@ Repo này public để dùng máy GitHub miễn phí. **Không có thông tin c�
 |---|---|
 | `daily` | 09:00 thứ 2–6: điền sheet daily, gửi báo cáo theo squad lên Telegram; mỗi 5 phút đọc ❤️ và nút ✅/❌ |
 | `ticket` | nhận **số task** trong repo task private. Job code (Linux): Claude làm tiếp nhánh theo Jira + Figma + test case QC, chạy verify/jest, đẩy lên `runner/<nhánh>`. Job **iOS** (macOS, simulator) và **Android** (Linux, emulator): build staging, chạy test case QC trên Jira, so Figma + requirement ở light/dark/RTL, gửi ảnh + HTML so sánh. Báo cáo vào task + Telegram |
+| `shift` | **ca trực giờ hành chính** (9h–15h, 15h–18h, thứ 2–6): máy iOS + Android build sẵn bản Debug, simulator/emulator + Metro bật sẵn, nhận task theo nhãn `ios-todo` / `android-todo`. Nhánh chỉ đổi JS thì test ngay, đổi native thì build tăng dần. Ngoài ca, `ticket` tự build lạnh |
 | `retro` | 17:00 thứ 6: thống kê sprint |
 | `remind` | gửi tin nhắc vào Chat/Telegram |
 
