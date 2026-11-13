@@ -6,6 +6,8 @@ Inputs:
 - The repo (current dir) — docs/ai/feature-map.md maps ticket areas to screens and deeplinks.
 - `maestro` is installed for taps/scrolls: write small flows under /tmp and run `maestro test <flow>`. Device commands are listed under "Platform".
 
+Progress: every time you start something new (a test case, a mode, a screen), append ONE short line to ../ctx/progress.txt, e.g. `TC_APP_UI_05 · dark` or `Chụp màn General Information · RTL`. The developer watches it live.
+
 Build the test list first, in this order:
 1. QC test cases from Jira: tables in "[QC] Test case & Testing" subtask descriptions (columns Test Case ID / Tiêu đề / Điều kiện / Các bước / Kết quả mong đợi), on this ticket or its story/siblings. Keep their IDs (TC_...). Skip cases that need another platform (Android-only), the admin tool, or a broken network you cannot simulate; list them as not tested.
 2. Bugs QC reported in comments (fixbug tickets): re-test each one.

@@ -42,6 +42,8 @@ reset_device() {  # back to light / LTR / English between tasks
   fi
 }
 
+step() { python3 -I "$R/progress.py" "$1" "$P" "${@:2}"; }
+
 label() { gh api -X "$1" "repos/$TASKS_REPO/issues/$2/labels${3:+/$3}" ${4:+-f "labels[]=$4"} >/dev/null 2>&1; }
 
 send_report() {  # <issue> <reported|reported-partial>: merged report of whatever platforms have results
@@ -88,6 +90,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   done
   [ -z "$N" ] && { sleep 30; continue; }
   label POST "$N" "" "$P-running"; label DELETE "$N" "$P-todo"
+  step "$N" "Nhận task (máy $P ${WORKER:-1})"
   export ISSUE="$N"; cd "$W"; rm -rf ctx shots; mkdir -p ctx/figma shots
   gh api "repos/$TASKS_REPO/issues/$N" --jq .body > ctx/task.md
   BRANCH=$(grep -m1 -oE '^branch:[[:space:]]*\S+' ctx/task.md | sed -E 's/^branch:[[:space:]]*//')
@@ -96,32 +99,40 @@ while [ "$(date +%s)" -lt "$END" ]; do
   log "task #$N"
   cd app
   REF="$BRANCH"; gl ls-remote --exit-code --heads "$REPO_URL" "runner/$BRANCH" >/dev/null 2>&1 && REF="runner/$BRANCH"
+  step "$N" "Lấy code nhánh $([ "$REF" = "$BRANCH" ] && echo của dev || echo runner)"
   gl fetch -q --depth 50 origin "$REF" && git checkout -q -f FETCH_HEAD && git clean -qfd
   if git diff --name-only "$BASE" HEAD 2>/dev/null | grep -qE '^(ios/|android/|package\.json|yarn\.lock|patches/)'; then
-    log "native change: rebuilding"
+    log "native change: rebuilding"; step "$N" "Có đổi native: build lại app"
     yarn install --ignore-engines >/dev/null 2>&1
     build_app || { echo "Build $P lỗi (rebuild trong ca)." > "$W/ctx/build-errors.txt"; }
     BASE=$(git rev-parse HEAD)
   fi
   reset_device
   cd "$W"
+  step "$N" "Đọc Jira, Confluence, Figma"
   python3 -I "$R/ticket-context.py" "$KEY" ctx/context.md >/dev/null && python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null
   ACC=$(python3 -I "$R/pick-account.py" "${ACCOUNT:-auto}" 2>/dev/null)
   TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_${ACC:-1}"
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket: $KEY. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
+    step "$N" "Claude bắt đầu QC"
+    # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
+    ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
     (cd app && perl -e 'alarm shift; exec @ARGV' 5400 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
       CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$prompt" --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
       --add-dir ../ctx --add-dir ../shots --output-format json \
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
   fi
+  kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
+  step "$N" "Lưu kết quả QC"
   bash "$R/qc-report.sh" "$P" "shift"
   label DELETE "$N" "$P-running"; label POST "$N" "" "$P-done"
   gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1  # free the claim for a later re-test
   # Whoever finishes last (or alone) sends the merged report.
   LABELS=$(gh api "repos/$TASKS_REPO/issues/$N" --jq '[.labels[].name] | join(",")')
   grep -qE "(^|,)($O-todo|$O-running|reported)(,|$)" <<<"$LABELS" || send_report "$N" reported
+  step "$N" "Xong"
   DONE=$((DONE + 1)); log "task done ($DONE this shift)"
 done
 # Shift over: tasks this platform finished while the other is still queued get a partial report now;

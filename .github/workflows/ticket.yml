@@ -61,6 +61,10 @@ jobs:
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=running" >/dev/null
           gh api -X DELETE "repos/$TASKS_REPO/issues/$ISSUE/labels/todo" >/dev/null 2>&1 || true
 
+      - name: progress
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/progress.py "$ISSUE" code "Clone nhánh + cài dependency"
       - name: clone
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -83,6 +87,10 @@ jobs:
         env: { HUSKY: '0' }
         run: yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
 
+      - name: progress
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/progress.py "$ISSUE" code "Đọc Jira, Confluence, Figma"
       - name: context
         env:
           JIRA_URL: ${{ secrets.JIRA_URL }}
@@ -104,6 +112,10 @@ jobs:
           n=$(python3 -I runner/scripts/pick-account.py "${{ inputs.account }}") || { echo "no Claude account has quota left" > ctx/report.md; exit 1; }
           echo "n=$n" >> "$GITHUB_OUTPUT"; echo "using account $n"
 
+      - name: progress
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/progress.py "$ISSUE" code "Claude đang code + verify/jest"
       - name: claude
         working-directory: app
         env:
@@ -119,6 +131,10 @@ jobs:
           echo "new commits: $(git rev-list --count "$before"..HEAD)"
           python3 -c "import json;d=json.load(open('../ctx/claude.json'));print('turns',d.get('num_turns'),'cost',round(d.get('total_cost_usd',0),2),'error',d.get('is_error'))" || true
 
+      - name: progress
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/progress.py "$ISSUE" code "Đẩy code lên nhánh runner"
       - name: push runner branch
         if: ${{ !cancelled() }}
         working-directory: app
@@ -130,6 +146,10 @@ jobs:
           # The developer's branch is never touched: work lands on runner/<branch> for review.
           git -c http.extraHeader="$auth" push -q --force origin "HEAD:refs/heads/runner/$BRANCH" && echo "PUSHED=1" >> "$GITHUB_ENV" && echo "pushed runner branch"
 
+      - name: progress
+        if: ${{ !cancelled() }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        run: python3 -I runner/scripts/progress.py "$ISSUE" code "Gửi báo cáo"
       - name: report
         # A cancelled run (e.g. moved to another account) says nothing; it will report when it reruns.
         if: ${{ !cancelled() }}
