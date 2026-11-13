@@ -1,0 +1,62 @@
+name: daily
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "dd/MM/yyyy (trống = hôm nay)"
+        required: false
+      dryrun:
+        description: "Chỉ gửi bản xem trước qua Telegram, không ghi sheet"
+        type: boolean
+        default: true
+  # 09:00 Vietnam time Mon–Fri; 10:00 retry in case the day's tab (made by someone else) was late.
+  schedule:
+    - cron: "0 2 * * 1-5"
+    - cron: "0 3 * * 1-5"
+    # Every 5 min: ❤ reactions and ✅/❌ draft buttons (Telegram keeps updates only 24h).
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write  # commit state/daily-state.json (hashed ids only)
+
+concurrency: daily
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'workflow_dispatch' || vars.DAILY_ENABLED == 'true'
+    env:
+      REACT_ONLY: ${{ github.event.schedule == '*/5 * * * *' && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      # Public repo: the script prints counts only; content goes to Percy's private Telegram group.
+      - run: python3 -I scripts/daily.py
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GOOGLE_OAUTH: ${{ secrets.GOOGLE_OAUTH }}
+          DAILY_SHEET_ID: ${{ secrets.DAILY_SHEET_ID }}
+          DAILY_ROW_NAME: ${{ secrets.DAILY_ROW_NAME }}
+          TG_BOT_TOKEN_1: ${{ secrets.TG_BOT_TOKEN_1 }}
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+          CHAT_WEBHOOKS: ${{ secrets.CHAT_WEBHOOKS }}
+          CHAT_MEMBERS: ${{ secrets.CHAT_MEMBERS }}
+          JIRA_MEMBERS: ${{ secrets.JIRA_MEMBERS }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          OFF_DAYS: ${{ vars.OFF_DAYS }}
+          DATE: ${{ inputs.date }}
+          RETRY: ${{ github.event.schedule == '0 3 * * 1-5' && '1' || '' }}
+          DRYRUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dryrun) && '1' || '' }}
+      - name: save state
+        if: always()
+        run: |
+          git diff --quiet -- state 2>/dev/null && [ -z "$(git status --porcelain state)" ] && exit 0
+          git config user.name percy-ticket-bot
+          git config user.email 62367533+nguyenphp@users.noreply.github.com
+          git add state && git commit -qm "state: daily" && git push -q

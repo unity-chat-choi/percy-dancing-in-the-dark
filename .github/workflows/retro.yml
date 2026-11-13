@@ -1,0 +1,27 @@
+name: retro
+
+on:
+  workflow_dispatch:
+  # Friday 17:00 Vietnam time. The AI-cost half is sent from each Mac (scripts/mac-retro.py, launchd).
+  schedule:
+    - cron: "0 10 * * 5"
+
+permissions: {}
+
+jobs:
+  retro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # Public repo: the script prints nothing but "retro sent".
+      - run: python3 -I scripts/retro.py
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_RETRO_TOPIC: ${{ secrets.TG_RETRO_TOPIC }}

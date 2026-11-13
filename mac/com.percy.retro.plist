@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.percy.retro</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/bin/python3</string><string>-I</string><string>__REPO__/scripts/mac-retro.py</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <!-- Friday 17:05 local time -->
+  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>5</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/percy-retro.log</string>
+  <key>StandardErrorPath</key><string>/tmp/percy-retro.log</string>
+</dict>
+</plist>

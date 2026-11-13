@@ -1,0 +1,39 @@
+name: remind
+
+on:
+  # Manual: Actions → remind → Run workflow
+  workflow_dispatch:
+    inputs:
+      space:
+        description: "Space name (a key of CHAT_WEBHOOKS) or telegram"
+        required: true
+      text:
+        description: "Message (@Alias = mention, \\n = new line)"
+        required: true
+      dryrun:
+        description: "Only print the body"
+        type: boolean
+        default: false
+  # 08:30 Vietnam time, Mon–Fri. Skipped unless repo variables DAILY_SPACE and DAILY_TEXT are set.
+  schedule:
+    - cron: "30 1 * * 1-5"
+
+permissions: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'workflow_dispatch' || (vars.DAILY_SPACE != '' && vars.DAILY_TEXT != '')
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I scripts/notify.py
+        env:
+          CHAT_WEBHOOKS: ${{ secrets.CHAT_WEBHOOKS }}
+          CHAT_MEMBERS: ${{ secrets.CHAT_MEMBERS }}
+          TG_BOT_TOKEN_1: ${{ secrets.TG_BOT_TOKEN_1 }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_NOTIFY_THREAD_ID: ${{ secrets.TG_NOTIFY_THREAD_ID }}
+          SPACE: ${{ github.event_name == 'schedule' && vars.DAILY_SPACE || inputs.space }}
+          TEXT: ${{ github.event_name == 'schedule' && vars.DAILY_TEXT || inputs.text }}
+          DRYRUN: ${{ inputs.dryrun && '1' || '' }}
