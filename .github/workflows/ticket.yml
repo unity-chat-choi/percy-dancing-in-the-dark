@@ -107,7 +107,7 @@ jobs:
           python3 -c "import json;d=json.load(open('../ctx/claude.json'));print('turns',d.get('num_turns'),'cost',round(d.get('total_cost_usd',0),2),'error',d.get('is_error'))" || true
 
       - name: push runner branch
-        if: always()
+        if: ${{ !cancelled() }}
         working-directory: app
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -115,10 +115,11 @@ jobs:
           [ "$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)" = 0 ] && { echo "nothing to push"; exit 0; }
           auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 -w0)"
           # The developer's branch is never touched: work lands on runner/<branch> for review.
-          git -c http.extraHeader="$auth" push -q --force origin "HEAD:refs/heads/runner/$BRANCH" && echo "pushed runner branch"
+          git -c http.extraHeader="$auth" push -q --force origin "HEAD:refs/heads/runner/$BRANCH" && echo "PUSHED=1" >> "$GITHUB_ENV" && echo "pushed runner branch"
 
       - name: report
-        if: always()
+        # A cancelled run (e.g. moved to another account) says nothing; it will report when it reruns.
+        if: ${{ !cancelled() }}
         env:
           TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
@@ -128,7 +129,8 @@ jobs:
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
         run: |
           [ -s ctx/report.md ] || echo "(Claude không viết report)" > ctx/report.md
-          printf '\n\nSo sánh: https://gitlab.com/%s/-/compare/%s...runner/%s\n' "$GITLAB_PROJECT" "$BRANCH" "$BRANCH" >> ctx/report.md
+          [ "${PUSHED:-}" = 1 ] && printf '\n\nCode runner thêm (so với nhánh của bạn): https://gitlab.com/%s/-/compare/%s...runner/%s\n' "$GITLAB_PROJECT" "$BRANCH" "$BRANCH" >> ctx/report.md
+          [ "${PUSHED:-}" = 1 ] || printf '\n\nRunner không thêm commit nào.\n' >> ctx/report.md
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@ctx/report.md >/dev/null
           gh api -X DELETE "repos/$TASKS_REPO/issues/$ISSUE/labels/running" >/dev/null 2>&1 || true
           label=$([ "${{ job.status }}" = success ] && echo done || echo blocked)
