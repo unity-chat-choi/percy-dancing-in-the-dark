@@ -104,7 +104,15 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Creating a ref is atomic: only one worker gets it, the others move on to the next task.
     if gh api -X POST "repos/$TASKS_REPO/git/refs" -f ref="refs/claims/$c-$P" -f sha="$CLAIM_SHA" >/dev/null 2>&1; then N=$c; break; fi
   done
-  [ -z "$N" ] && { sleep 30; continue; }
+  if [ -z "$N" ]; then
+    # Nothing to take: leave after 20 idle minutes, unless a fix round may still send work back to this platform.
+    IDLE=$(( ${IDLE:-0} + 30 ))
+    if [ "$IDLE" -ge 1200 ] && [ -z "$(gh api "repos/$TASKS_REPO/issues?state=open&per_page=100" --jq '.[] | select([.labels[].name] | (index("running") or index("ios-running") or index("android-running") or index("ios-todo") or index("android-todo"))) | .number' 2>/dev/null)" ]; then
+      log "idle 20 min, queue empty: leaving the shift"; break
+    fi
+    sleep 30; continue
+  fi
+  IDLE=0
   label POST "$N" "" "$P-running"; label DELETE "$N" "$P-todo"
   step "$N" "Nhận task (máy $P ${WORKER:-1})"
   export ISSUE="$N"; cd "$W"; rm -rf ctx shots; mkdir -p ctx/figma shots
