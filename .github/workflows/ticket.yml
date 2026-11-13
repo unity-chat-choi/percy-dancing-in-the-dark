@@ -16,7 +16,11 @@ on:
         type: boolean
         default: true
       ios:
-        description: "Also build the staging app on an iOS simulator, screenshot and compare with Figma"
+        description: "QC on an iOS simulator (staging build, light/dark/RTL, Jira QC test cases, Figma)"
+        type: boolean
+        default: true
+      android:
+        description: "QC on an Android emulator (same checks)"
         type: boolean
         default: true
       account:
@@ -148,7 +152,7 @@ jobs:
           printf '\nTask: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report.md
           python3 -I runner/scripts/tg-report.py ctx/report.md ctx/context.md "$title"
 
-  # QC on a real build: staging app on an iOS simulator, screenshots light/dark vs Figma.
+  # QC on real builds: staging app on an iOS simulator and an Android emulator, light/dark/RTL vs Figma + QC test cases.
   ios:
     needs: work
     if: ${{ !cancelled() && inputs.ios }}
@@ -175,7 +179,7 @@ jobs:
           key=$(grep -m1 -oE '(US|UTD|UOB)-[0-9]+' <<<"$branch")
           echo "::add-mask::$branch"; echo "::add-mask::$key"; echo "::add-mask::${branch##*/}"
           echo "BRANCH=$branch" >> "$GITHUB_ENV"; echo "KEY=$key" >> "$GITHUB_ENV"
-          auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64)"
+          auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 | tr -d '\n')"
           # Test what the runner produced when it pushed something, else the developer's branch.
           ref="$branch"; git -c http.extraHeader="$auth" ls-remote --exit-code --heads "https://gitlab.com/$GITLAB_PROJECT.git" "runner/$branch" >/dev/null 2>&1 && ref="runner/$branch"
           git -c http.extraHeader="$auth" clone -q --depth 1 --branch "$ref" "https://gitlab.com/$GITLAB_PROJECT.git" app
@@ -204,7 +208,7 @@ jobs:
         env: { HUSKY: '0' }
         run: |
           yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
-          cd ios && bundle install --quiet >/dev/null 2>&1 && bundle exec pod install >/tmp/pod.log 2>&1 && echo "pods ok" || { echo "pod install failed"; tail -c 0 /tmp/pod.log; exit 1; }
+          cd ios && bundle install --quiet >/dev/null 2>&1 && bundle exec pod install >/tmp/pod.log 2>&1 && echo "pods ok" || { echo "pod install failed"; exit 1; }
 
       - name: build
         working-directory: app/ios
@@ -220,7 +224,7 @@ jobs:
               echo "build failed: $(grep -c ' error: ' /tmp/build.log) errors"
               # Private report only (public log prints counts): compiler errors + the linker's real reason.
               { grep ' error: ' /tmp/build.log | head -15
-                grep -E '^ld: |Undefined symbols|referenced from|building for|ld: warning: ignoring file' /tmp/build.log | sort -u | head -25; } > ../../ctx/build-errors.txt
+                grep -E '^ld: |Undefined symbols|referenced from|building for' /tmp/build.log | grep -v 'ld: warning' | sort -u | head -25; } > ../../ctx/build-errors.txt
               exit 1; }
 
       - name: simulator
@@ -229,7 +233,7 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if x['name'].startswith('iPhone') and x['name'].endswith('Pro')))")
           xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b >/dev/null
           xcrun simctl install booted "$app"
-          echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
+          echo "APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
           curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
           echo "simulator ready"
 
@@ -249,7 +253,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.pick.outputs.n == '2' && secrets.CLAUDE_CODE_OAUTH_TOKEN_2 || steps.pick.outputs.n == '3' && secrets.CLAUDE_CODE_OAUTH_TOKEN_3 || secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
         run: |
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
-          prompt="$(sed "s/\$BUNDLE_ID/$BUNDLE_ID/" ../runner/prompts/ios-test.md)"$'\n\n'"Ticket: $KEY."
+          prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-ios.md)"$'\n\n'"Ticket: $KEY."
           timeout 5400 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --add-dir ../shots --output-format json \
             --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
@@ -264,21 +268,114 @@ jobs:
           TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
           GH_TOKEN: ${{ secrets.TASKS_PAT }}
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
-        run: |
-          if [ ! -s ctx/ios-report.md ]; then
-            { echo "## Kết quả: CHƯA TEST ĐƯỢC"; echo; [ -s ctx/build-errors.txt ] && { echo "Build iOS lỗi:"; cat ctx/build-errors.txt; } || echo "Bước iOS dừng trước khi QC xong (${{ job.status }})."; } > ctx/ios-report.md
-          fi
-          python3 -I runner/scripts/tg-report.py ctx/ios-report.md ctx/context.md "$KEY · test iOS simulator · task #$ISSUE"
-          # Screenshots go into the private task repo and show inside the task comment (also used for the Jira comment).
-          if ls shots/*.png >/dev/null 2>&1; then
-            { echo; echo "### Ảnh app iOS (staging)"; python3 -I runner/scripts/task-images.py "$ISSUE" shots/*.png; } >> ctx/ios-report.md
-          fi
-          if ls ctx/figma/*.png >/dev/null 2>&1; then
-            { echo; echo "### Figma"; python3 -I runner/scripts/task-images.py "$ISSUE" ctx/figma/*.png; } >> ctx/ios-report.md
-          fi
-          gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@ctx/ios-report.md >/dev/null
-          python3 -I runner/scripts/html-report.py "$KEY · test iOS · task #$ISSUE" ctx/ios-report.md ctx/pairs.json ctx/figma shots ctx/report.html
-          python3 -I runner/scripts/tg-doc.py ctx/report.html ctx/context.md "$KEY · báo cáo so sánh (mở file HTML)" || true
-          files=$(ls ctx/figma/*.png shots/*.png 2>/dev/null)
-          [ -n "$files" ] && python3 -I runner/scripts/tg-photos.py ctx/context.md "$KEY · Figma (ảnh đầu) và app iOS staging" $files || true
+        run: bash runner/scripts/qc-report.sh ios "${{ job.status }}"
 
+  android:
+    needs: work
+    if: ${{ !cancelled() && inputs.android }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults: { run: { shell: bash } }
+    env:
+      ISSUE: ${{ inputs.issue }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: runner }
+
+      - name: task
+        env:
+          GH_TOKEN: ${{ secrets.TASKS_PAT }}
+          TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+        run: |
+          mkdir -p ctx/figma shots
+          gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq .body > ctx/task.md
+          branch=$(grep -m1 -oE '^branch:[[:space:]]*\S+' ctx/task.md | sed -E 's/^branch:[[:space:]]*//')
+          key=$(grep -m1 -oE '(US|UTD|UOB)-[0-9]+' <<<"$branch")
+          echo "::add-mask::$branch"; echo "::add-mask::$key"; echo "::add-mask::${branch##*/}"
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"; echo "KEY=$key" >> "$GITHUB_ENV"
+          auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 | tr -d '\n')"
+          # Test what the runner produced when it pushed something, else the developer's branch.
+          ref="$branch"; git -c http.extraHeader="$auth" ls-remote --exit-code --heads "https://gitlab.com/$GITLAB_PROJECT.git" "runner/$branch" >/dev/null 2>&1 && ref="runner/$branch"
+          git -c http.extraHeader="$auth" clone -q --depth 1 --branch "$ref" "https://gitlab.com/$GITLAB_PROJECT.git" app
+          echo "testing $([ "$ref" = "$branch" ] && echo developer || echo runner) branch"
+
+      - name: context
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+        run: |
+          python3 -I runner/scripts/ticket-context.py "$KEY" ctx/context.md | sed 's#^.*(#context (#'
+          python3 -I runner/scripts/figma-render.py ctx/context.md ctx/figma
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            app/node_modules
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: android-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/android/**/*.gradle', 'app/android/gradle.properties') }}
+      - name: install
+        working-directory: app
+        env: { HUSKY: '0' }
+        run: yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
+
+      - name: build
+        working-directory: app/android
+        env: { ENVFILE: .env.staging }
+        run: |
+          # The team ships ARM only; the emulator is x86_64, so add that ABI for this build.
+          set -o pipefail
+          ./gradlew :app:assembleStagingRelease -PreactNativeArchitectures=x86_64 --no-daemon -q > /tmp/build.log 2>&1 \
+            && echo "build ok" || {
+              echo "build failed"
+              { grep -E '^e: |error:|FAILURE|What went wrong' -A3 /tmp/build.log | head -40; } > ../../ctx/build-errors.txt
+              exit 1; }
+          echo "APK=$(ls "$PWD"/app/build/outputs/apk/staging/release/*.apk | head -1)" >> "$GITHUB_ENV"
+
+      - name: pick account
+        id: pick
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          CLAUDE_CODE_OAUTH_TOKEN_2: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_2 }}
+          CLAUDE_CODE_OAUTH_TOKEN_3: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_3 }}
+        run: |
+          n=$(python3 -I runner/scripts/pick-account.py "${{ inputs.account }}") || { echo "no Claude account has quota left"; exit 1; }
+          echo "n=$n" >> "$GITHUB_OUTPUT"; echo "using account $n"
+
+      - name: enable kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: emulator + qc
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.pick.outputs.n == '2' && secrets.CLAUDE_CODE_OAUTH_TOKEN_2 || steps.pick.outputs.n == '3' && secrets.CLAUDE_CODE_OAUTH_TOKEN_3 || secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          MODEL: ${{ inputs.model }}
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash runner/scripts/android-qc.sh
+
+      - name: report
+        if: ${{ !cancelled() }}
+        env:
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+          GH_TOKEN: ${{ secrets.TASKS_PAT }}
+          TASKS_REPO: ${{ secrets.TASKS_REPO }}
+        run: bash runner/scripts/qc-report.sh android "${{ job.status }}"
