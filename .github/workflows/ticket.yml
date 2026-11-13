@@ -11,6 +11,10 @@ on:
       model:
         description: "Claude model"
         default: opus
+      work:
+        description: "Let Claude continue the code (off = only test what is on the branch)"
+        type: boolean
+        default: true
       ios:
         description: "Also build the staging app on an iOS simulator, screenshot and compare with Figma"
         type: boolean
@@ -26,6 +30,7 @@ concurrency:
 
 jobs:
   work:
+    if: ${{ inputs.work }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     defaults: { run: { shell: bash } }
