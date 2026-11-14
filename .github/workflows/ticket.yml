@@ -136,7 +136,10 @@ jobs:
             --add-dir ../ctx --output-format json \
             --disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch \
             > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
-          echo "new commits: $(git rev-list --count "$before"..HEAD)"
+          # Claude often leaves its work uncommitted: commit it here, minus files the team never commits.
+          git add -A -- . ':!*.md' ':!Gemfile.lock' ':!ReactotronConfig.js' ':!ios/uniscore.xcodeproj/project.pbxproj' 2>/dev/null || true
+          git diff --cached --quiet || git commit -qm "$(echo ${KEYS:-$KEY} | cut -d' ' -f1) fix: runner changes for QC" --no-verify
+          echo "new commits: $(git rev-list --count "$before"..HEAD), changed files: $(git diff --name-only "$before"..HEAD | wc -l | tr -d ' ')"
           python3 -c "import json;d=json.load(open('../ctx/claude.json'));print('turns',d.get('num_turns'),'cost',round(d.get('total_cost_usd',0),2),'error',d.get('is_error'))" || true
 
       - name: progress
