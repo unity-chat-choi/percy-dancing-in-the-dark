@@ -18,7 +18,9 @@ if [ "$(uname -m)" = arm64 ]; then SIM_ARCH=arm64; SIM_EXCLUDE=x86_64; else SIM_
 
 build_app() {  # full or incremental build + install
   if [ "$P" = ios ]; then
-    (cd ios && bundle exec pod install >/tmp/pod.log 2>&1) || { log "pod install failed"; return 1; }
+    # Cold Intel runners hit flaky CocoaPods CDN downloads: retry with a spec repo update.
+    (cd ios && { bundle exec pod install >/tmp/pod.log 2>&1 || { sleep 30; bundle exec pod install --repo-update >/tmp/pod.log 2>&1; } \
+      || { sleep 60; bundle exec pod install --repo-update >/tmp/pod.log 2>&1; }; }) || { log "pod install failed"; return 1; }
     xcodebuild -workspace ios/uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
       -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=$SIM_ARCH ONLY_ACTIVE_ARCH=YES \
       EXCLUDED_ARCHS=$SIM_EXCLUDE CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet >/tmp/build.log 2>&1 \
@@ -116,6 +118,12 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Creating a ref is atomic: only one worker gets it, the others move on to the next task.
     if gh api -X POST "repos/$TASKS_REPO/git/refs" -f ref="refs/claims/$c-$P" -f sha="$CLAIM_SHA" >/dev/null 2>&1; then N=$c; break; fi
   done
+  # The job is killed at 360 min: never start a task that cannot finish, leave it to the next shift.
+  HARD=$(( START + ${MINUTES:-120} * 60 + 3 * 60 )); LEFT=$(( HARD - $(date +%s) ))
+  if [ "$LEFT" -lt 3600 ]; then
+    [ -n "$N" ] && gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1
+    log "under 60 min left: leaving the rest to the next shift"; RELAY_AT=0; relay; break
+  fi
   if [ -z "$N" ]; then
     # Nothing to take: leave after 20 idle minutes, unless a fix round may still send work back to this platform.
     IDLE=$(( ${IDLE:-0} + 30 ))
@@ -162,7 +170,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
-    (cd app && perl -e 'alarm shift; exec @ARGV' 9000 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
+    LEFT=$(( HARD - $(date +%s) )); QC_BUDGET=$(( LEFT - 600 < 9000 ? LEFT - 600 : 9000 )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none; recheck after the build
+    (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
       CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$prompt" --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
       --add-dir ../ctx --add-dir ../shots --output-format json \
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
