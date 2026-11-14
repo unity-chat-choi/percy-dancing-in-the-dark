@@ -9,8 +9,8 @@ on:
         description: "Task number in the private task repo"
         required: true
       model:
-        description: "Claude model"
-        default: opus
+        description: "Claude model: auto = Opus plans and takes over what Sonnet could not fix, Sonnet codes"
+        default: auto
       work:
         description: "Let Claude continue the code (off = only test what is on the branch)"
         type: boolean
@@ -53,6 +53,7 @@ jobs:
         run: |
           mkdir -p ctx
           gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq .body > ctx/task.md
+          gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq '[.labels[].name|select(startswith("fix-round-"))|ltrimstr("fix-round-")|tonumber]|max // 0' > ctx/fix-round
           branch=$(grep -m1 -oE '^branch:[[:space:]]*\S+' ctx/task.md | sed -E 's/^branch:[[:space:]]*//')
           key=$(grep -m1 -oE '(US|UTD|UOB)-[0-9]+' <<<"$branch")
           [ -n "$branch" ] && [ -n "$key" ] || { echo "task has no branch line"; exit 1; }
@@ -135,22 +136,40 @@ jobs:
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           before=$(git rev-parse HEAD)
           prompt="$(cat ../runner/prompts/ticket.md)"$'\n\n'"Ticket(s): ${KEYS:-$KEY}. Branch: $BRANCH. Task notes from the developer (follow them): ../ctx/task.md"
-          # The picked account runs out mid-task → switch to another free one and resume the same session.
-          TRIED="$ACC"; MSG="$prompt"; RESUME=""; T0=$(date +%s)
-          while :; do
-            tv="T$ACC"
-            CLAUDE_CODE_OAUTH_TOKEN="${!tv}" T1= T2= T3= perl -e 'alarm shift; exec @ARGV' $(( 7800 - $(date +%s) + T0 )) \
-              claude -p "$MSG" ${RESUME:+--resume "$RESUME"} --model "${{ inputs.model }}" --dangerously-skip-permissions \
-              --add-dir ../ctx --output-format json \
-              --disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch \
-              > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
-            grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ../ctx/claude.json || break
-            NEXT=$(EXCLUDE="$TRIED" CLAUDE_CODE_OAUTH_TOKEN_1="$T1" CLAUDE_CODE_OAUTH_TOKEN_2="$T2" CLAUDE_CODE_OAUTH_TOKEN_3="$T3" \
-              python3 -I ../runner/scripts/pick-account.py auto 2>/dev/null) || break
-            RESUME=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' ../ctx/claude.json 2>/dev/null)
-            [ -n "$RESUME" ] && MSG="Your Claude account ran out mid-task; continue exactly where you stopped."
-            echo "account $ACC ran out, switching to $NEXT"; ACC=$NEXT; TRIED="$TRIED$ACC"
-          done
+          TRIED="$ACC"; T0=$(date +%s)
+          run() {  # run <model> <message> [extra args]: switches account and resumes when one runs out
+            local model=$1 msg=$2 resume="" next; shift 2
+            while :; do
+              tv="T$ACC"
+              CLAUDE_CODE_OAUTH_TOKEN="${!tv}" T1= T2= T3= perl -e 'alarm shift; exec @ARGV' $(( 7800 - $(date +%s) + T0 )) \
+                claude -p "$msg" ${resume:+--resume "$resume"} --model "$model" --dangerously-skip-permissions \
+                --add-dir ../ctx --output-format json "$@" > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
+              grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ../ctx/claude.json || return 0
+              next=$(EXCLUDE="$TRIED" CLAUDE_CODE_OAUTH_TOKEN_1="$T1" CLAUDE_CODE_OAUTH_TOKEN_2="$T2" CLAUDE_CODE_OAUTH_TOKEN_3="$T3" \
+                python3 -I ../runner/scripts/pick-account.py auto 2>/dev/null) || return 1
+              resume=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' ../ctx/claude.json 2>/dev/null)
+              [ -n "$resume" ] && msg="Your Claude account ran out mid-task; continue exactly where you stopped."
+              echo "account $ACC ran out, switching to $next"; ACC=$next; TRIED="$TRIED$ACC"
+            done
+          }
+          NO_PUSH=(--disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch)
+          M="${{ inputs.model }}"; ROUND=$(cat ../ctx/fix-round 2>/dev/null || echo 0)
+          if [ "$M" != auto ]; then run "$M" "$prompt" "${NO_PUSH[@]}"
+          else
+            # Sonnet already failed a fix round on this task → Opus takes over.
+            if [ "$ROUND" -ge 2 ]; then CODER=opus; else CODER=sonnet; fi
+            if [ "$ROUND" = 0 ]; then  # new work: Opus plans (read-only), Sonnet follows the plan
+              echo "plan: opus"
+              run opus "$prompt"$'\n\n'"PLANNING ONLY: read everything, then write a concrete step-by-step plan (files, functions, edge cases, tests) to ../ctx/plan.md. Do not edit app code." \
+                --disallowedTools Edit "Bash(git *)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch
+              [ -s ../ctx/plan.md ] && prompt="$prompt"$'\n'"Follow the plan in ../ctx/plan.md (made by a senior engineer)."
+            fi
+            echo "code: $CODER (fix round $ROUND)"; run "$CODER" "$prompt" "${NO_PUSH[@]}"
+            # Sonnet changed nothing → Opus tries once.
+            if [ "$CODER" = sonnet ] && git diff --quiet "$before" && [ -z "$(git status --porcelain)" ]; then
+              echo "sonnet made no change: opus takes over"; run opus "$prompt" "${NO_PUSH[@]}"
+            fi
+          fi
           # Claude often leaves its work uncommitted: commit it here, minus files the team never commits.
           git add -A -- . ':!*.md' ':!Gemfile.lock' ':!ReactotronConfig.js' ':!ios/uniscore.xcodeproj/project.pbxproj' 2>/dev/null || true
           git diff --cached --quiet || git commit -qm "$(echo ${KEYS:-$KEY} | cut -d' ' -f1) fix: runner changes for QC" --no-verify
@@ -336,7 +355,7 @@ jobs:
         run: |
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-ios.md)"$'\n\n'"Ticket: $KEY."
-          perl -e 'alarm shift; exec @ARGV' 9000 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
+          perl -e 'alarm shift; exec @ARGV' 9000 claude -p "$prompt" --model "${{ inputs.model == 'auto' && 'sonnet' || inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --add-dir ../shots --output-format json \
             --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
             > ../ctx/qc.json 2>/dev/null || echo "claude exited non-zero"
@@ -455,7 +474,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.pick.outputs.n == '2' && secrets.CLAUDE_CODE_OAUTH_TOKEN_2 || steps.pick.outputs.n == '3' && secrets.CLAUDE_CODE_OAUTH_TOKEN_3 || secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
-          MODEL: ${{ inputs.model }}
+          MODEL: ${{ inputs.model == 'auto' && 'sonnet' || inputs.model }}
         with:
           api-level: 34
           arch: x86_64
