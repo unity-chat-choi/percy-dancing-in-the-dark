@@ -127,15 +127,30 @@ jobs:
       - name: claude
         working-directory: app
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.pick.outputs.n == '2' && secrets.CLAUDE_CODE_OAUTH_TOKEN_2 || steps.pick.outputs.n == '3' && secrets.CLAUDE_CODE_OAUTH_TOKEN_3 || secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          T1: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          T2: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_2 }}
+          T3: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_3 }}
+          ACC: ${{ steps.pick.outputs.n }}
         run: |
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           before=$(git rev-parse HEAD)
           prompt="$(cat ../runner/prompts/ticket.md)"$'\n\n'"Ticket(s): ${KEYS:-$KEY}. Branch: $BRANCH. Task notes from the developer (follow them): ../ctx/task.md"
-          perl -e 'alarm shift; exec @ARGV' 7800 claude -p "$prompt" --model "${{ inputs.model }}" --dangerously-skip-permissions \
-            --add-dir ../ctx --output-format json \
-            --disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch \
-            > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
+          # The picked account runs out mid-task → switch to another free one and resume the same session.
+          TRIED="$ACC"; MSG="$prompt"; RESUME=""; T0=$(date +%s)
+          while :; do
+            tv="T$ACC"
+            CLAUDE_CODE_OAUTH_TOKEN="${!tv}" T1= T2= T3= perl -e 'alarm shift; exec @ARGV' $(( 7800 - $(date +%s) + T0 )) \
+              claude -p "$MSG" ${RESUME:+--resume "$RESUME"} --model "${{ inputs.model }}" --dangerously-skip-permissions \
+              --add-dir ../ctx --output-format json \
+              --disallowedTools "Bash(git push*)" "Bash(curl*)" "Bash(wget*)" WebFetch WebSearch \
+              > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
+            grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ../ctx/claude.json || break
+            NEXT=$(EXCLUDE="$TRIED" CLAUDE_CODE_OAUTH_TOKEN_1="$T1" CLAUDE_CODE_OAUTH_TOKEN_2="$T2" CLAUDE_CODE_OAUTH_TOKEN_3="$T3" \
+              python3 -I ../runner/scripts/pick-account.py auto 2>/dev/null) || break
+            RESUME=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' ../ctx/claude.json 2>/dev/null)
+            [ -n "$RESUME" ] && MSG="Your Claude account ran out mid-task; continue exactly where you stopped."
+            echo "account $ACC ran out, switching to $NEXT"; ACC=$NEXT; TRIED="$TRIED$ACC"
+          done
           # Claude often leaves its work uncommitted: commit it here, minus files the team never commits.
           git add -A -- . ':!*.md' ':!Gemfile.lock' ':!ReactotronConfig.js' ':!ios/uniscore.xcodeproj/project.pbxproj' 2>/dev/null || true
           git diff --cached --quiet || git commit -qm "$(echo ${KEYS:-$KEY} | cut -d' ' -f1) fix: runner changes for QC" --no-verify

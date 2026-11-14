@@ -159,7 +159,9 @@ while [ "$(date +%s)" -lt "$END" ]; do
   KEYS=$(grep -oE '(US|UTD|UOB)-[0-9]+' ctx/task.md | sort -u | tr '\n' ' '); for k in $KEYS; do echo "::add-mask::$k"; done
   for k in $KEYS; do python3 -I "$R/ticket-context.py" "$k" "ctx/c-$k.md" >/dev/null; done; cat ctx/c-*.md > ctx/context.md
   python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null
-  ACC=$(python3 -I "$R/pick-account.py" "${ACCOUNT:-auto}" 2>/dev/null)
+  # A task can name its account ("account: 2" in the issue body); it is only a preference, a full account is skipped.
+  PREF=$(grep -m1 -oE '^account: *[123]' ctx/task.md | grep -oE '[123]$')
+  ACC=$(python3 -I "$R/pick-account.py" "${PREF:-${ACCOUNT:-auto}}" 2>/dev/null)
   TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_${ACC:-1}"
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a staging Release build (JS bundled); after switching mode relaunch it."
@@ -170,15 +172,27 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
-    LEFT=$(( HARD - $(date +%s) )); QC_BUDGET=$(( LEFT - 600 < 9000 ? LEFT - 600 : 9000 )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none; recheck after the build
-    (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
-      CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$prompt" --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
-      --add-dir ../ctx --add-dir ../shots --output-format json \
-      --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
+    # The chosen account runs out mid-QC → switch to another free one and resume the same session.
+    TRIED="$ACC"; RESUME=""; MSG="$prompt"
+    while :; do
+      TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_$ACC"
+      LEFT=$(( HARD - $(date +%s) )); QC_BUDGET=$(( LEFT - 600 < 9000 ? LEFT - 600 : 9000 )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none
+      (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
+        CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$MSG" \
+        ${RESUME:+--resume "$RESUME"} --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
+        --add-dir ../ctx --add-dir ../shots --output-format json \
+        --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
+      grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ctx/qc.json 2>/dev/null || break
+      NEXT=$(EXCLUDE="$TRIED" python3 -I "$R/pick-account.py" auto 2>/dev/null) || break
+      RESUME=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' ctx/qc.json 2>/dev/null)
+      [ -n "$RESUME" ] && MSG="Your Claude account ran out mid-task; continue the QC exactly where you stopped."
+      step "$N" "Tài khoản $ACC hết lượt → chuyển sang tài khoản $NEXT"
+      ACC=$NEXT; TRIED="$TRIED$ACC"
+    done
   fi
   kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
   # Account limit hit (or no account free): not the app's fault, so put the task back without using a try.
-  if [ -z "$ACC" ] || grep -qiE "hit your (session|usage) limit|usage limit reached|rate_limit" ctx/qc.json 2>/dev/null; then
+  if [ -z "$ACC" ] || grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ctx/qc.json 2>/dev/null; then
     label POST "$N" "" "$P-todo"; label DELETE "$N" "$P-running"
     gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1
     step "$N" "Hết lượt Claude, xếp hàng lại (không tính lần thử)"; log "claude limit: requeued"; sleep 600; continue

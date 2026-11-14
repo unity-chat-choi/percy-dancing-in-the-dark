@@ -30,7 +30,10 @@ def quota(token):
 
 pref = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in "123" else None
 ok = {}
+skip = os.environ.get("EXCLUDE", "")  # accounts that already ran out in this run
 for n in "123":
+    if n in skip:
+        continue
     tok = os.environ.get(f"CLAUDE_CODE_OAUTH_TOKEN_{n}")
     if not tok:
         continue
