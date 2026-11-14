@@ -120,9 +120,26 @@ img{{width:100%;border-radius:8px;border:1px solid var(--line)}} .none{{padding:
 open(os.path.join(out, "report.html"), "w").write(page)
 
 head = f"# {title}\n" + " · ".join(f"**{NAME[p]}: {d['verdict']}**" for p, d in data.items()) + "\n"
-tg = head + "".join(f"\n## {NAME[p]}\n" + re.sub(r"^## Kết quả:[^\n]*\n", "", d["md"], flags=re.M) for p, d in data.items())
-open(os.path.join(out, "telegram.md"), "w").write(tg)
-comment = tg
+full = head + "".join(f"\n## {NAME[p]}\n" + re.sub(r"^## Kết quả:[^\n]*\n", "", d["md"], flags=re.M) for p, d in data.items())
+# Telegram: a few lines only (Percy does not read long messages); everything else is in the HTML and the task.
+def short_verdict(d):
+    try:
+        v = json.load(open(os.path.join(d["dir"], "verdict.json")))
+    except (OSError, ValueError):
+        v = {}
+    bugs = [b for b in v.get("bugs") or [] if b.get("scope") in ("ticket", "blocking")]
+    r = v.get("result") or d["verdict"].split()[0]
+    return f"{r}" + (f" ({len(bugs)} bug)" if bugs else ""), bugs
+lines, allbugs = [], []
+for p, d in data.items():
+    r, bugs = short_verdict(d); lines.append(f"{NAME[p]}: {r}"); allbugs += bugs
+seen, tops = set(), []
+for b in allbugs:
+    if b["title"] not in seen:
+        seen.add(b["title"]); tops.append(f"🐞 {b['title'][:90]}")
+tg = " · ".join(lines) + ("\n" + "\n".join(tops[:3]) if tops else "") + "\n📄 So Figma | iOS | Android: file HTML bên dưới"
+open(os.path.join(out, "telegram.md"), "w").write(tg + "\n")
+comment = full
 if figmas:  # Figma frames uploaded by the caller to qc/issue-N/figma/
     base = f"https://github.com/{os.environ['TASKS_REPO']}/blob/HEAD/qc/issue-{issue}/figma"
     comment += "\n### Figma\n" + "\n".join(f'<img src="{base}/{f}?raw=true" width="220" alt="{f}">' for f in figmas) + "\n"

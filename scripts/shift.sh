@@ -125,6 +125,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
   label POST "$N" "" "$P-running"; label DELETE "$N" "$P-todo"
   step "$N" "Nhận task (máy $P ${WORKER:-1})"
   export ISSUE="$N"; cd "$W"; rm -rf ctx shots; mkdir -p ctx/figma shots
+  # Pick up the newest prompts and helper scripts for every task (not this running file: bash reads it as it goes).
+  ( cd runner && git fetch -q origin main && git checkout -q FETCH_HEAD -- prompts $(git ls-tree --name-only FETCH_HEAD scripts/ | grep -v '^scripts/shift.sh$') ) 2>/dev/null || true
   gh api "repos/$TASKS_REPO/issues/$N" --jq .body > ctx/task.md
   BRANCH=$(grep -m1 -oE '^branch:[[:space:]]*\S+' ctx/task.md | sed -E 's/^branch:[[:space:]]*//')
   KEY=$(grep -m1 -oE '(US|UTD|UOB)-[0-9]+' <<<"$BRANCH"); export KEY

@@ -176,9 +176,10 @@ jobs:
           gh api -X DELETE "repos/$TASKS_REPO/issues/$ISSUE/labels/running" >/dev/null 2>&1 || true
           label=$([ "${{ job.status }}" = success ] && echo done || echo blocked)
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=$label" >/dev/null
-          title="$KEY · runner xong (${{ job.status }}) · task #$ISSUE · nhánh runner/$BRANCH"
           printf '\nTask: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report.md
-          python3 -I runner/scripts/tg-report.py ctx/report.md ctx/context.md "$title"
+          python3 -I runner/scripts/short.py ctx/report.md ctx/report-short.md 3
+          printf '\nChi tiết: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report-short.md
+          python3 -I runner/scripts/tg-report.py ctx/report-short.md ctx/context.md "$KEY · code xong (${{ job.status }}) · task #$ISSUE"
 
   # During a shift the warm workers take the QC (labels <platform>-todo); otherwise the cold jobs below run.
   route:

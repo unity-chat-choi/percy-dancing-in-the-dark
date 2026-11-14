@@ -40,7 +40,7 @@ else
 import json, os, sys, urllib.request
 key, p, n, why = sys.argv[1:5]
 msg = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "disable_web_page_preview": True,
-       "text": f"⛔ {key} · task #{n}: QC {p} kẹt sau 3 lần thử, cần anh xem.\nVướng: {why}\nhttps://github.com/{os.environ['TASKS_REPO']}/issues/{n}"}
+       "text": f"⛔ {key}: QC {p} kẹt sau 3 lần\nVướng: {why[:160]}"}
 urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
                        data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"}), timeout=20)
 PYA
@@ -64,12 +64,12 @@ issue = api(f"/repos/{repo}/issues/{n}")
 labels = [l["name"] for l in issue["labels"]]
 key = os.environ.get("KEY", "")
 if other:
-    tg(f"🐞 QC {p} thấy bug NGOÀI ticket ({key}, task #{n}) — cần ticket Jira riêng nếu muốn sửa:\n" + "\n".join(f"• {b['title']} ({b.get('where','')})" for b in other))
+    tg(f"🐞 {key}: {len(other)} bug ngoài ticket (cần ticket Jira riêng)\n" + "\n".join(f"• {b['title'][:80]}" for b in other[:2]))
 if not fix:  # bugs of the ticket, or app bugs that block testing it, are fixed whatever the verdict (FAIL or BLOCKED)
     sys.exit(0)
 rounds = sum(1 for l in labels if l.startswith("fix-round-"))
 if rounds >= 2:
-    tg(f"⛔ {key} · task #{n}: đã sửa 2 vòng mà QC {p} vẫn còn bug, cần anh xem.\n" + "\n".join(f"• {b['title']}" for b in fix)); sys.exit(0)
+    tg(f"⛔ {key}: sửa 2 vòng vẫn còn bug, cần anh xem\n" + "\n".join(f"• {b['title'][:80]}" for b in fix[:2])); sys.exit(0)
 mark = f"fix-round-{rounds + 1}"
 if mark in labels:
     sys.exit(0)  # the other platform already opened this round
@@ -82,7 +82,7 @@ for q in ("ios", "android"):  # both platforms test again after the fix
         try: api(f"/repos/{repo}/issues/{n}/labels/{l}", method="DELETE")
         except Exception: pass
 api(f"/repos/{runner}/actions/workflows/ticket.yml/dispatches", {"ref": "main", "inputs": {"issue": str(n)}}, "POST")
-tg(f"🔧 {key} · task #{n}: QC {p} thấy {len(fix)} bug của ticket → runner đang sửa (vòng {rounds + 1}), xong sẽ QC lại cả iOS + Android.\n" + "\n".join(f"• {b['title']}" for b in fix))
+tg(f"🔧 {key}: {len(fix)} bug → đang sửa (vòng {rounds + 1}), xong QC lại\n" + "\n".join(f"• {b['title'][:80]}" for b in fix[:2]))
 open("ctx/qc-status", "w").write("fixing")
 PYB
 echo "qc $P: $(cat ctx/qc-status)"
