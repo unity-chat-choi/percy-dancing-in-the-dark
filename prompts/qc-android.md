@@ -3,3 +3,4 @@ Platform: Android emulator (adb, one device), package $APP_ID.
 - Screenshot: `adb exec-out screencap -p > ../shots/<name>.png`
 - Light / Dark: `adb shell cmd uimode night no|yes`, then force-stop + launch
 - RTL: `adb shell settings put global debug.force_rtl 1` (0 to undo), then force-stop + launch; for Arabic text also switch the app language in its settings
+- Small copy to Read: `convert ../shots/<name>.png -resize 900x900 /tmp/v-<name>.png` (or `python3 -c` with PIL if convert is missing)

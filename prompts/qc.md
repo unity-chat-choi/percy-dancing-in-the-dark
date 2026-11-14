@@ -28,7 +28,7 @@ Lessons: at the end write ../ctx/lessons-new.md, one line per lesson starting wi
 
 For every screen in scope check three modes and screenshot each into ../shots/ (max 12 files, `<n>-<screen>-<light|dark|rtl>.png`):
 - Light, Dark and RTL — the commands for each are under "Platform". If the app keeps its own language setting, change it in the app's settings instead.
-Open each screenshot with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
+Open each evidence screenshot (a small copy, see Tokens) with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
 Use real staging data; if a screen has no data on staging, say so instead of guessing. Do not change code, do not commit, do not call external services, never print secrets.
 
 Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
@@ -50,3 +50,8 @@ Write ../ctx/qc-report.md in Vietnamese, short, for Telegram (no markdown tables
 ## So Figma + requirement — khớp / lệch cụ thể, kèm tên ảnh
 ## Dark / Light / RTL — vấn đề riêng từng mode
 ## Không test được — và lý do
+
+Tokens (each image you Read stays in context for the rest of the run, so keep them few and small):
+- Navigate by text, not pictures: read the UI tree (`maestro hierarchy`) to find elements, tap with Maestro, check text values from the tree.
+- Read a screenshot only to judge visuals (Figma compare, theme, RTL), and Read a downscaled copy: the command is under "Platform". Keep the full-size file in ../shots as evidence.
+- Do not re-Read the same screen or Figma frame; write what you saw into your notes instead.
