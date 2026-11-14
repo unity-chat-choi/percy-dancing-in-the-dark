@@ -1,13 +1,15 @@
 """Verified Maestro setup flows (onboarding, theme, language…), shared by every QC run.
 Stored in the private task repo under flows/ (app details stay private), next to lessons/qc.md.
 
-get <dir>   download every flow into <dir>
-put <dir>   upload <dir>/*.yaml (same name replaces the stored flow)
+get <dir> [path]   download every flow under <path> (default flows/) into <dir>
+put <dir> [path]   upload <dir>/*.yaml to <path> (same name replaces the stored flow)
+Per-ticket test scenarios live under scenarios/<ticket key>/.
 Env: GH_TOKEN, TASKS_REPO
 """
 import base64, glob, json, os, sys, urllib.error, urllib.request
 
-API = f"https://api.github.com/repos/{os.environ['TASKS_REPO']}/contents/flows"
+cmd, d = sys.argv[1], sys.argv[2]
+API = f"https://api.github.com/repos/{os.environ['TASKS_REPO']}/contents/" + (sys.argv[3] if len(sys.argv) > 3 else "flows").strip("/")
 H = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"}
 
 
@@ -24,7 +26,6 @@ def listing():
         return {}
 
 
-cmd, d = sys.argv[1], sys.argv[2]
 have = listing()
 if cmd == "get":
     os.makedirs(d, exist_ok=True)

@@ -177,6 +177,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a staging Release build (JS bundled); after switching mode relaunch it."
     python3 -I "$R/lessons.py" get ctx/lessons.md >/dev/null
     python3 -I "$R/flows.py" get ctx/flows >/dev/null 2>&1 || true
+    python3 -I "$R/flows.py" get ctx/scenarios "scenarios/$KEY" >/dev/null 2>&1 || true
     # same data as the other platform, when it went first
     python3 -I "$R/task-files.py" get "$N" "$O" ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json
     step "$N" "Claude bắt đầu QC"
@@ -185,10 +186,11 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
     # The chosen account runs out mid-QC → switch to another free one and resume the same session.
     TRIED="$ACC"; RESUME=""; MSG="$prompt"
+    date +%s > "$W/ctx/qc-start"
     while :; do
       TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_$ACC"
       LEFT=$(( HARD - $(date +%s) )); QC_MAX=$([ "$P" = ios ] && echo 2100 || echo 2700); QC_BUDGET=$(( LEFT - 600 < QC_MAX ? LEFT - 600 : QC_MAX )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none
-      (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
+      (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" APP_ID="$APP_ID" \
         CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$MSG" \
         ${RESUME:+--resume "$RESUME"} --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
         --add-dir ../ctx --add-dir ../shots --output-format json \
@@ -210,6 +212,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
   fi
   python3 -I "$R/lessons.py" add ctx/lessons-new.md 2>/dev/null || true
   python3 -I "$R/flows.py" put ctx/flows-new 2>/dev/null || true
+  python3 -I "$R/flows.py" put ctx/scenarios-new "scenarios/$KEY" 2>/dev/null || true
+  python3 -I "$R/qc-metrics.py" add "$P" 2>/dev/null || true
   step "$N" "Lưu kết quả QC"
   bash "$R/qc-report.sh" "$P" "shift"   # labels: <P>-done, or back to <P>-todo (retry), or blocked
   case "$(cat ctx/qc-status 2>/dev/null)" in

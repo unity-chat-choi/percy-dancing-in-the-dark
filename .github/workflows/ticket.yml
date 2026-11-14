@@ -387,6 +387,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py get ctx/lessons.md
           python3 -I runner/scripts/flows.py get ctx/flows || true
+          python3 -I runner/scripts/flows.py get ctx/scenarios "scenarios/$KEY" || true
           python3 -I runner/scripts/task-files.py get "$ISSUE" android ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
       - name: qc
@@ -396,6 +397,7 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.pick.outputs.n == '2' && secrets.CLAUDE_CODE_OAUTH_TOKEN_2 || steps.pick.outputs.n == '3' && secrets.CLAUDE_CODE_OAUTH_TOKEN_3 || secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
         run: |
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
+          date +%s > ../ctx/qc-start
           prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-ios.md)"$'\n\n'"Ticket: $KEY."
           perl -e 'alarm shift; exec @ARGV' 2100 claude -p "$prompt" --model "${{ inputs.model == 'auto' && 'sonnet' || inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --add-dir ../shots --output-format json \
@@ -405,10 +407,12 @@ jobs:
 
       - name: learn
         if: ${{ (!cancelled()) && inputs.qc }}
-        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}", PLATFORM: ios }
         run: |
           python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
           python3 -I runner/scripts/flows.py put ctx/flows-new || true
+          python3 -I runner/scripts/flows.py put ctx/scenarios-new "scenarios/$KEY" || true
+          python3 -I runner/scripts/qc-metrics.py add "$PLATFORM" || true
 
       - name: store result
         if: ${{ (!cancelled()) && inputs.qc }}
@@ -547,6 +551,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py get ctx/lessons.md
           python3 -I runner/scripts/flows.py get ctx/flows || true
+          python3 -I runner/scripts/flows.py get ctx/scenarios "scenarios/$KEY" || true
           python3 -I runner/scripts/task-files.py get "$ISSUE" ios ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
       # Snapshot-booted AVD (cached once) instead of a cold boot every run.
@@ -594,10 +599,12 @@ jobs:
 
       - name: learn
         if: ${{ (!cancelled()) && inputs.qc }}
-        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}", PLATFORM: android }
         run: |
           python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
           python3 -I runner/scripts/flows.py put ctx/flows-new || true
+          python3 -I runner/scripts/flows.py put ctx/scenarios-new "scenarios/$KEY" || true
+          python3 -I runner/scripts/qc-metrics.py add "$PLATFORM" || true
 
       - name: store result
         if: ${{ (!cancelled()) && inputs.qc }}

@@ -22,6 +22,10 @@ API ↔ UI (the platform that runs functional cases: Android; iOS only if a case
 - try at least one edge case from real data when it exists (empty list, null field, long name, a team/league without the data);
 - write each mismatch as a bug: endpoint + param, API value, UI value, screenshot. If the API itself returns wrong/missing data, report it as a backend issue (scope "other") and say so; do not work around it.
 
+Scenarios — replay first, then save: ../ctx/scenarios/ holds Maestro test scenarios saved by earlier runs of THIS ticket, `<platform>-<case id>.yaml`, one per test case / requirement item.
+- Start by replaying every file of your platform: `maestro test -e APP_ID=$APP_ID ../ctx/scenarios/<platform>-*.yaml`, then move the screenshots it takes into ../shots. A passed scenario still gets its screenshot checked (Figma, requirement) and its API values compared, but no navigating by hand. Explore by hand only the cases whose scenario fails or that have none (new items, changed requirement).
+- Every case you test by hand becomes a scenario: save the flow that actually ran to ../ctx/scenarios-new/<platform>-<case id>.yaml (same name replaces a broken one). It starts with `appId: ${APP_ID}`, reaches the screen through the setup flows (`- runFlow: ../flows/<platform>-<name>.yaml`) and deeplinks, and ends with `- takeScreenshot: <case id>-<mode>` for each mode it covers. The next run (fix round, regression) then only replays.
+
 Ready flows: ../ctx/flows/ holds verified Maestro flows `<platform>-<name>.yaml` for setup steps (skip onboarding, light, dark, Arabic/RTL, English). Run them with `maestro test` instead of finding the taps again. When you get a setup step working that has no flow yet, or you fix a broken one, save the flow that ran successfully to ../ctx/flows-new/<platform>-<name>.yaml (same name replaces it). Generic setup only: no ticket data, no secrets.
 
 Rulebook: read ../ctx/lessons.md FIRST. It holds what blocked earlier runs and how it was solved; apply it.
