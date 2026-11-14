@@ -8,7 +8,7 @@ export APP_ID=$("$AAPT" dump packagename "$APK" 2>/dev/null || echo com.unity.un
 npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
 cd app
 prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-android.md)"$'\n\n'"Ticket: $KEY."
-perl -e 'alarm shift; exec @ARGV' 9000 claude -p "$prompt" --model "$MODEL" --dangerously-skip-permissions \
+perl -e 'alarm shift; exec @ARGV' 2700 claude -p "$prompt" --model "$MODEL" --dangerously-skip-permissions \
   --add-dir ../ctx --add-dir ../shots --output-format json \
   --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
   > ../ctx/qc.json 2>/dev/null || echo "claude exited non-zero"

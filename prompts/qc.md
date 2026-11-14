@@ -14,6 +14,8 @@ Build the test list first, in this order:
 3. Requirement: the ticket/story acceptance criteria, Confluence spec and the latest PO/BA comments (newer comments override older text).
 4. Figma: every frame.
 
+Ready flows: ../ctx/flows/ holds verified Maestro flows `<platform>-<name>.yaml` for setup steps (skip onboarding, light, dark, Arabic/RTL, English). Run them with `maestro test` instead of finding the taps again. When you get a setup step working that has no flow yet, or you fix a broken one, save the flow that ran successfully to ../ctx/flows-new/<platform>-<name>.yaml (same name replaces it). Generic setup only: no ticket data, no secrets.
+
 Rulebook: read ../ctx/lessons.md FIRST. It holds what blocked earlier runs and how it was solved; apply it.
 
 "Không test được" is the last resort. When something blocks you, work through this ladder and note each attempt:
