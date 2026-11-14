@@ -297,14 +297,23 @@ jobs:
             app/node_modules
             app/ios/Pods
           key: ios-${{ runner.arch }}-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/ios/Podfile') }}
+          restore-keys: ios-${{ runner.arch }}-
+      # Prebuilt staging .app keyed by everything native: a JS-only branch reuses it and only re-bundles the JS.
+      - name: native key
+        run: echo "NATIVE_KEY=ios-app-${{ runner.arch }}-${{ hashFiles('app/ios/**', '!app/ios/Pods/**', '!app/ios/build/**', 'app/yarn.lock', 'app/package.json', 'app/patches/**', 'app/.env*') }}" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@v4
+        id: appcache
+        with: { path: prebuilt, key: "${{ env.NATIVE_KEY }}" }
       - name: install
         working-directory: app
         env: { HUSKY: '0' }
         run: |
           yarn install --frozen-lockfile --ignore-engines --network-timeout 600000 >/dev/null 2>&1 || yarn install --ignore-engines >/dev/null 2>&1
+          [ "${{ steps.appcache.outputs.cache-hit }}" = true ] && { echo "prebuilt app hit: skipping pods"; exit 0; }
           cd ios && bundle install --quiet >/dev/null 2>&1 && bundle exec pod install >/tmp/pod.log 2>&1 && echo "pods ok" || { echo "pod install failed"; exit 1; }
 
       - name: build
+        if: steps.appcache.outputs.cache-hit != 'true'
         working-directory: app/ios
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)" >/dev/null
@@ -321,10 +330,20 @@ jobs:
               { grep ' error: ' /tmp/build.log | head -15
                 grep -E '^ld: |Undefined symbols|referenced from|building for' /tmp/build.log | grep -v 'ld: warning' | sort -u | head -25; } > ../../ctx/build-errors.txt
               exit 1; }
+          mkdir -p ../../prebuilt && cp -R ../../build/Build/Products/ReleaseStag-iphonesimulator/*.app ../../prebuilt/
+      - uses: actions/cache/save@v4
+        if: steps.appcache.outputs.cache-hit != 'true'
+        with: { path: prebuilt, key: "${{ env.NATIVE_KEY }}" }
+      - name: js bundle
+        if: steps.appcache.outputs.cache-hit == 'true'
+        working-directory: app
+        run: |
+          bash ../runner/scripts/ios-js-swap.sh "$(ls -d ../prebuilt/*.app | grep -v Extension | head -1)" && echo "js swapped into prebuilt app" \
+            || { echo "js bundle failed"; echo "JS bundle lỗi (Metro)." > ../ctx/build-errors.txt; exit 1; }
 
       - name: simulator
         run: |
-          app=$(ls -d build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
+          app=$(ls -d prebuilt/*.app | grep -v Extension | head -1)
           udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if x['name'].startswith('iPhone') and x['name'].endswith('Pro')))")
           xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b >/dev/null
           xcrun simctl install booted "$app"
@@ -423,13 +442,21 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - uses: actions/cache@v4
+      # Gradle checks inputs by content: restored build dirs make a JS-only rebuild ~bundle + package only.
+      # Explicit save right after the build so a cancelled QC still keeps the cache.
+      - uses: actions/cache/restore@v4
         with:
           path: |
             app/node_modules
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: android-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/android/**/*.gradle', 'app/android/gradle.properties') }}
+            app/android/.gradle
+            app/android/build
+            app/android/app/build
+          key: android-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/android/**/*.gradle', 'app/android/gradle.properties') }}-${{ github.run_id }}
+          restore-keys: |
+            android-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/android/**/*.gradle', 'app/android/gradle.properties') }}-
+            android-
       - name: install
         working-directory: app
         env: { HUSKY: '0' }
@@ -439,14 +466,24 @@ jobs:
         working-directory: app/android
         env: { ENVFILE: .env.staging }
         run: |
-          # ARM-only APK like the team ships (abiFilters); the x86_64 emulator runs it through ARM translation.
+          # ARM APK like the team ships; arm64 only (half the C++ compile), the x86_64 emulator runs it through ARM translation.
           set -o pipefail
-          ./gradlew :app:assembleStagingRelease --no-daemon -q > /tmp/build.log 2>&1 \
+          ./gradlew :app:assembleStagingRelease --no-daemon --build-cache -PreactNativeArchitectures=arm64-v8a -q > /tmp/build.log 2>&1 \
             && echo "build ok" || {
               echo "build failed"
               { grep -E '^e: |error:|FAILURE|What went wrong' -A3 /tmp/build.log | head -40; } > ../../ctx/build-errors.txt
               exit 1; }
           echo "APK=$(ls "$PWD"/app/build/outputs/apk/staging/release/*.apk | head -1)" >> "$GITHUB_ENV"
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            app/node_modules
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            app/android/.gradle
+            app/android/build
+            app/android/app/build
+          key: android-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/android/**/*.gradle', 'app/android/gradle.properties') }}-${{ github.run_id }}
 
       - name: pick account
         id: pick

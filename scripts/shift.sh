@@ -25,12 +25,12 @@ build_app() {  # full or incremental build + install
       -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=$SIM_ARCH ONLY_ACTIVE_ARCH=YES \
       EXCLUDED_ARCHS=$SIM_EXCLUDE CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet >/tmp/build.log 2>&1 \
       || { log "ios build failed"; return 1; }
-    APP=$(ls -d "$W"/build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
+    APP=$(ls -d "$W"/build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1); export APP
     xcrun simctl install booted "$APP"
     APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
   else
     (cd android && ENVFILE=.env.staging ./gradlew :app:assembleStagingRelease \
-      --build-cache -q >/tmp/build.log 2>&1) || { log "android build failed"; return 1; }
+      --build-cache -PreactNativeArchitectures=arm64-v8a -q >/tmp/build.log 2>&1) || { log "android build failed"; return 1; }
     adb install -r "$(ls android/app/build/outputs/apk/staging/release/*.apk | head -1)" >/dev/null
     APP_ID=com.unity.uniscore.stag
   fi
@@ -148,10 +148,19 @@ while [ "$(date +%s)" -lt "$END" ]; do
   REF="$BRANCH"; gl ls-remote --exit-code --heads "$REPO_URL" "runner/$BRANCH" >/dev/null 2>&1 && REF="runner/$BRANCH"
   step "$N" "Lấy code nhánh $([ "$REF" = "$BRANCH" ] && echo của dev || echo runner)"
   gl fetch -q --depth 50 origin "$REF" && git checkout -q -f FETCH_HEAD && git clean -qfd
-  if [ "$(git rev-parse HEAD)" != "$BASE" ]; then  # Release build bundles the JS, so any change needs an (incremental) rebuild
-    log "rebuilding for this branch"; step "$N" "Build bản Release cho nhánh này"
+  if [ "$(git rev-parse HEAD)" != "$BASE" ]; then  # Release build bundles the JS, so any change needs a rebuild
     yarn install --ignore-engines >/dev/null 2>&1
-    build_app || { echo "Build $P lỗi (rebuild trong ca)." > "$W/ctx/build-errors.txt"; }
+    # iOS JS-only change: re-bundle into the installed .app (~1-2 min) instead of xcodebuild.
+    # Native diff unknown (shallow history) counts as native.
+    NATIVE=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo ios/)
+    if [ "$P" = ios ] && [ -n "${APP:-}" ] && ! grep -qE '^(ios/|patches/|package\.json$|yarn\.lock$|\.env)' <<<"$NATIVE"; then
+      log "js-only branch: re-bundling"; step "$N" "Đóng gói lại JS cho nhánh này"
+      if bash "$R/ios-js-swap.sh" "$APP"; then xcrun simctl install booted "$APP"
+      else echo "JS bundle lỗi (Metro)." > "$W/ctx/build-errors.txt"; fi
+    else
+      log "rebuilding for this branch"; step "$N" "Build bản Release cho nhánh này"
+      build_app || { echo "Build $P lỗi (rebuild trong ca)." > "$W/ctx/build-errors.txt"; }
+    fi
     BASE=$(git rev-parse HEAD)
   fi
   reset_device

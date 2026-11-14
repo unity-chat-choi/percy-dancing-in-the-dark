@@ -101,6 +101,9 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             app/node_modules
+            app/android/.gradle
+            app/android/build
+            app/android/app/build
           key: shift-android-${{ github.run_id }}
           restore-keys: shift-android-
       - name: enable kvm
