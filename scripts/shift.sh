@@ -13,12 +13,15 @@ REPO_URL="https://gitlab.com/$GITLAB_PROJECT.git"
 gl() { git -c http.extraHeader="$AUTH" "$@"; }
 log() { echo "[$(date +%H:%M)] $*"; }
 
+# Simulator architecture follows the Mac: Apple Silicon → arm64, Intel → x86_64.
+if [ "$(uname -m)" = arm64 ]; then SIM_ARCH=arm64; SIM_EXCLUDE=x86_64; else SIM_ARCH=x86_64; SIM_EXCLUDE=arm64; fi
+
 build_app() {  # full or incremental build + install
   if [ "$P" = ios ]; then
     (cd ios && bundle exec pod install >/tmp/pod.log 2>&1) || { log "pod install failed"; return 1; }
     xcodebuild -workspace ios/uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
-      -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-      EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet >/tmp/build.log 2>&1 \
+      -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=$SIM_ARCH ONLY_ACTIVE_ARCH=YES \
+      EXCLUDED_ARCHS=$SIM_EXCLUDE CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet >/tmp/build.log 2>&1 \
       || { log "ios build failed"; return 1; }
     APP=$(ls -d "$W"/build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
     xcrun simctl install booted "$APP"
@@ -95,7 +98,7 @@ curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; export PATH="$
 npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
 BASE=$(git rev-parse HEAD); DONE=0
 CLAIM_SHA=$(gh api "repos/$TASKS_REPO/commits/HEAD" --jq .sha)
-log "warm, taking tasks (worker ${WORKER:-1})"
+log "warm, taking tasks (worker ${WORKER:-1}, $(uname -m), warm-up $(( ($(date +%s) - START) / 60 )) min)"
 
 relay() {  # one worker (ios 1) starts the next shift while this one finishes, only if work is left
   [ "$RELAYED" = 1 ] || [ "$P" != ios ] || [ "${WORKER:-1}" != 1 ] || [ "$(date +%s)" -lt "$RELAY_AT" ] && return

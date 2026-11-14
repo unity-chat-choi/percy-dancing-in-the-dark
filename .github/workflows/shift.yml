@@ -10,7 +10,8 @@ on:
     inputs:
       minutes: { description: "Shift length in minutes (max 350 ≈ 6h job limit; a relay shift starts 20 min before the end)", default: "350" }
       ios_workers: { description: "iOS simulators (macOS free plan: max 5 at once)", default: "3" }
-      android_workers: { description: "Android emulators", default: "3" }
+      android_workers: { description: "Android emulators (0 = none)", default: "3" }
+      ios_runner: { description: "iOS machine: macos-26 (Apple Silicon, 3 cores 7GB) or macos-15-intel (Intel, 4 cores 14GB)", default: "macos-26" }
 
 permissions: {}
 
@@ -48,16 +49,17 @@ jobs:
     steps:
       - id: p
         run: |
-          r() { python3 -c "import json,sys;print(json.dumps(list(range(1,max(1,min(int(sys.argv[1]),$2))+1))))" "$1"; }
+          r() { python3 -c "import json,sys;print(json.dumps(list(range(1,max(0,min(int(sys.argv[1]),$2))+1))))" "$1"; }
           echo "ios=$(r '${{ inputs.ios_workers || '3' }}' 5)" >> "$GITHUB_OUTPUT"
           echo "android=$(r '${{ inputs.android_workers || '3' }}' 8)" >> "$GITHUB_OUTPUT"
 
   ios:
     needs: plan
+    if: needs.plan.outputs.ios != '[]'
     strategy:
       fail-fast: false
       matrix: { worker: "${{ fromJSON(needs.plan.outputs.ios) }}" }
-    runs-on: macos-26
+    runs-on: ${{ inputs.ios_runner || 'macos-26' }}
     timeout-minutes: 360
     defaults: { run: { shell: bash } }
     steps:
@@ -79,6 +81,7 @@ jobs:
 
   android:
     needs: plan
+    if: needs.plan.outputs.android != '[]'
     strategy:
       fail-fast: false
       matrix: { worker: "${{ fromJSON(needs.plan.outputs.android) }}" }
