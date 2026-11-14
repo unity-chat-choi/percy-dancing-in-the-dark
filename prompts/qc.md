@@ -14,6 +14,14 @@ Build the test list first, in this order:
 3. Requirement: the ticket/story acceptance criteria, Confluence spec and the latest PO/BA comments (newer comments override older text).
 4. Figma: every frame.
 
+Requirement checklist: split step 3 into single checkable items (one acceptance criterion, one spec rule or one PO/BA decision each, with its source: ticket, story, Confluence page or comment id). Every item gets Pass / Fail / Không test được in the report. This is the core of QC: speed never justifies skipping an item.
+
+API ↔ UI (the platform that runs functional cases: Android; iOS only if a case is iOS-specific): for every screen in scope
+- find the request the screen makes (`src/hooks/<sport>-api/`, the module's hooks; base URL and API version from the code / Remote Config defaults) and call the staging API yourself with the same params as the data you test (curl is disabled: use `python3 -c` with urllib or `node -e` with fetch; read-only GETs only; never print tokens);
+- compare field by field with what the app shows: values, units/format (decimals, %, dates/timezones), ordering, grouping, which fields are hidden when null/0/empty, fallback texts, and that the app reads the field the spec names (not a look-alike);
+- try at least one edge case from real data when it exists (empty list, null field, long name, a team/league without the data);
+- write each mismatch as a bug: endpoint + param, API value, UI value, screenshot. If the API itself returns wrong/missing data, report it as a backend issue (scope "other") and say so; do not work around it.
+
 Ready flows: ../ctx/flows/ holds verified Maestro flows `<platform>-<name>.yaml` for setup steps (skip onboarding, light, dark, Arabic/RTL, English). Run them with `maestro test` instead of finding the taps again. When you get a setup step working that has no flow yet, or you fix a broken one, save the flow that ran successfully to ../ctx/flows-new/<platform>-<name>.yaml (same name replaces it). Generic setup only: no ticket data, no secrets.
 
 Rulebook: read ../ctx/lessons.md FIRST. It holds what blocked earlier runs and how it was solved; apply it.
@@ -31,7 +39,7 @@ Lessons: at the end write ../ctx/lessons-new.md, one line per lesson starting wi
 For every screen in scope check three modes and screenshot each into ../shots/ (max 12 files, `<n>-<screen>-<light|dark|rtl>.png`):
 - Light, Dark and RTL — the commands for each are under "Platform". If the app keeps its own language setting, change it in the app's settings instead.
 Open each evidence screenshot (a small copy, see Tokens) with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
-Use real staging data; if a screen has no data on staging, say so instead of guessing. Do not change code, do not commit, do not call external services, never print secrets.
+Use real staging data; if a screen has no data on staging, say so instead of guessing. Do not change code, do not commit, do not call external services other than read-only GETs to the app's staging API, never print secrets.
 
 Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
 [{"screen": "<short name>", "figma": "<file name in ../ctx/figma or empty>", "shots": {"light": "<file in ../shots>", "dark": "...", "rtl": "..."}, "verdict": "khớp|lệch|không test được", "notes": "<one line: what differs>"}]
@@ -42,13 +50,15 @@ Definition of done (the worker decides with this file): ../ctx/verdict.json — 
 {"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>",
  "bugs":[{"title":"<short>","scope":"ticket|blocking|other","where":"<file/screen>","detail":"<steps, expected vs actual, screenshot name>"}]}
 - scope: "ticket" = this ticket's own change is wrong; "blocking" = an app bug that stops this ticket from working/being tested (e.g. wrong API version for its screen); "other" = unrelated area. Bugs with scope ticket/blocking are fixed automatically in the next round, so describe them precisely.
-- PASS = every case checked in light, dark and RTL and matches Figma + requirement. FAIL = checked, and you found bugs (listed in the report).
+- PASS = every case and requirement item checked in light, dark and RTL, API ↔ UI matches, and matches Figma. FAIL = checked, and you found bugs (listed in the report).
 - A mode you could not reach is false, and then result must be BLOCKED: the task goes back to the queue and the next run continues from your lessons. Never mark PASS/FAIL with a mode missing.
 
 Write ../ctx/qc-report.md in Vietnamese, short, for Telegram (no markdown tables):
 ## Kết quả: PASS / FAIL / CHƯA TEST ĐƯỢC  (x/y test case pass)
 ## Test case QC — one line each: TC_ID — Pass/Fail/Không test được — lý do ngắn
 ## Bug QC cũ — đã hết / vẫn còn
+## Requirement — one line each: <item> (<source>) — Pass/Fail/Không test được — lý do ngắn
+## API ↔ UI — endpoint đã gọi, field nào khớp / lệch (giá trị API vs UI)
 ## So Figma + requirement — khớp / lệch cụ thể, kèm tên ảnh
 ## Dark / Light / RTL — vấn đề riêng từng mode
 ## Không test được — và lý do
