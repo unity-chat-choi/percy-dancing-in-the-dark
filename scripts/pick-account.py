@@ -2,7 +2,7 @@
 
 Skip an account when it has used >= 90% of its weekly quota and the weekly reset is more than 1 day away,
 or >= 95% of its 5-hour session.
-Among the rest, take the preferred one if given (argv[1]), else the one with the most weekly quota left.
+Among the rest, take the preferred one if given (argv[1]), else the least-used 5-hour session (then weekly).
 Quota comes from the rate-limit headers of a 1-token Haiku call. Prints the account number, or exits 1 if none.
 """
 import json, os, sys, time, urllib.error, urllib.request
@@ -41,7 +41,8 @@ for n in "123":
     print(f"account {n}: week {used if used is not None else '?'} reset in {days:.1f}d{' SKIP' if blocked else ''}"
           if days is not None else f"account {n}: week {used} reset ?{' SKIP' if blocked else ''}", file=sys.stderr)
     if not blocked:
-        ok[n] = used if used is not None else 0.5
+        # Spread load by the 5-hour session first: picking by weekly use alone sent every worker to one account.
+        ok[n] = (five, used if used is not None else 0.5)
 if not ok:
     sys.exit(1)
 print(pref if pref in ok else min(ok, key=ok.get))
