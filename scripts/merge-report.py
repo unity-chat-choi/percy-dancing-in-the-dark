@@ -111,17 +111,21 @@ main{{max-width:1300px;margin:auto}} h1{{font-size:20px;margin:0 0 8px}}
 section{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:16px 0}}
 .row{{display:grid;grid-template-columns:1fr 3fr;gap:12px}} .grid3{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}
 @media (max-width:800px){{.row{{grid-template-columns:1fr}}}}
-.plat{{margin-bottom:12px}} figure{{margin:0}} figcaption{{font-size:11px;color:var(--mut);font-weight:700;margin-bottom:4px}}
+.plat{{margin-bottom:12px}} .figs{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}} figure{{margin:0}} figcaption{{font-size:11px;color:var(--mut);font-weight:700;margin-bottom:4px}}
 img{{width:100%;border-radius:8px;border:1px solid var(--line)}} .none{{padding:40px 8px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:8px}}
 .tag,.notes{{color:var(--mut);font-size:13px}} .notes{{margin:2px 0 6px}} details{{margin-top:16px}} summary{{font-weight:700;cursor:pointer}}
 </style></head><body><main><h1>{esc(title)}</h1>{badges}
-<h2>So sánh từng màn</h2>{''.join(sections) or '<p>Không có ảnh chụp.</p>'}{texts}</main></body></html>"""
+<h2>Figma</h2><div class="figs">{''.join(f'<figure><figcaption>{esc(f)}</figcaption>{img(os.path.join(figma_dir, f))}</figure>' for f in figmas) or '<p>Ticket không có link Figma.</p>'}</div>
+<h2>So sánh từng màn (Figma | Light | Dark | RTL)</h2>{''.join(sections) or '<p>Không có ảnh chụp.</p>'}{texts}</main></body></html>"""
 open(os.path.join(out, "report.html"), "w").write(page)
 
 head = f"# {title}\n" + " · ".join(f"**{NAME[p]}: {d['verdict']}**" for p, d in data.items()) + "\n"
 tg = head + "".join(f"\n## {NAME[p]}\n" + re.sub(r"^## Kết quả:[^\n]*\n", "", d["md"], flags=re.M) for p, d in data.items())
 open(os.path.join(out, "telegram.md"), "w").write(tg)
 comment = tg
+if figmas:  # Figma frames uploaded by the caller to qc/issue-N/figma/
+    base = f"https://github.com/{os.environ['TASKS_REPO']}/blob/HEAD/qc/issue-{issue}/figma"
+    comment += "\n### Figma\n" + "\n".join(f'<img src="{base}/{f}?raw=true" width="220" alt="{f}">' for f in figmas) + "\n"
 for p, d in data.items():
     imgs = [f for f in sorted(os.listdir(d["dir"])) if f.endswith(".png")]
     if imgs:

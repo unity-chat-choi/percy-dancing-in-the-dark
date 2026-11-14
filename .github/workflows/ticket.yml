@@ -496,6 +496,7 @@ jobs:
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
           TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
         run: |
+          ls ctx/figma/*.png >/dev/null 2>&1 && python3 -I runner/scripts/task-files.py put "$ISSUE" figma ctx/figma/*.png
           python3 -I runner/scripts/merge-report.py "$KEY · QC iOS + Android · task #$ISSUE" ctx/figma qc "$ISSUE" out
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@out/comment.md >/dev/null
           python3 -I runner/scripts/tg-report.py out/telegram.md ctx/context.md "$KEY · QC iOS + Android · task #$ISSUE"

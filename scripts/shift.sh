@@ -6,7 +6,8 @@
 # Usage: shift.sh <ios|android>   Env: MINUTES, secrets (see shift.yml). Public log: counts only.
 set -uo pipefail
 P="$1"; O=$([ "$P" = ios ] && echo android || echo ios)
-W="$PWD"; R="$W/runner/scripts"; END=$(( $(date +%s) + ${MINUTES:-120} * 60 - 15 * 60 ))
+W="$PWD"; R="$W/runner/scripts"; START=$(date +%s); END=$(( START + ${MINUTES:-120} * 60 - 15 * 60 ))
+RELAY_AT=$(( START + ${MINUTES:-120} * 60 - 20 * 60 )); RELAYED=0   # 20 min before the end: start the next shift
 AUTH="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 | tr -d '\n')"
 REPO_URL="https://gitlab.com/$GITLAB_PROJECT.git"
 gl() { git -c http.extraHeader="$AUTH" "$@"; }
@@ -54,6 +55,7 @@ send_report() {  # <issue> <reported|reported-partial>: merged report of whateve
   [ -s ctx/context.md ] && [ "${KEY:-}" = "$key" ] || { python3 -I "$R/ticket-context.py" "$key" ctx/context.md >/dev/null; rm -f ctx/figma/*; python3 -I "$R/figma-render.py" ctx/context.md ctx/figma >/dev/null; }
   for p in ios android; do python3 -I "$R/task-files.py" get "$n" "$p" "qc/$p" >/dev/null; done
   local tag=""; [ "$mark" = reported-partial ] && tag=" (một phần: $O chưa test, hết ca)"
+  ls ctx/figma/*.png >/dev/null 2>&1 && python3 -I "$R/task-files.py" put "$n" figma ctx/figma/*.png
   python3 -I "$R/merge-report.py" "$key · QC iOS + Android · task #$n$tag" ctx/figma qc "$n" out >/dev/null
   gh api -X POST "repos/$TASKS_REPO/issues/$n/comments" -F body=@out/comment.md >/dev/null
   python3 -I "$R/tg-report.py" out/telegram.md ctx/context.md "$key · QC · task #$n$tag" >/dev/null
@@ -97,8 +99,17 @@ BASE=$(git rev-parse HEAD); DONE=0
 CLAIM_SHA=$(gh api "repos/$TASKS_REPO/commits/HEAD" --jq .sha)
 log "warm, taking tasks (worker ${WORKER:-1})"
 
+relay() {  # one worker (ios 1) starts the next shift while this one finishes, only if work is left
+  [ "$RELAYED" = 1 ] || [ "$P" != ios ] || [ "${WORKER:-1}" != 1 ] || [ "$(date +%s)" -lt "$RELAY_AT" ] && return
+  RELAYED=1
+  [ -n "$(gh api "repos/$TASKS_REPO/issues?state=open&per_page=100" --jq '.[] | select([.labels[].name] | (index("ios-todo") or index("android-todo") or index("ios-running") or index("android-running") or index("running"))) | .number' 2>/dev/null)" ] || return
+  gh workflow run shift.yml -R "$GITHUB_REPOSITORY" -f minutes=350 -f ios_workers="${IOS_WORKERS:-2}" -f android_workers="${ANDROID_WORKERS:-3}" >/dev/null 2>&1 \
+    && log "relay: next shift started" || log "relay failed"
+}
+
 # --- task loop
 while [ "$(date +%s)" -lt "$END" ]; do
+  relay
   N=""
   for c in $(gh api "repos/$TASKS_REPO/issues?labels=$P-todo&state=open&sort=created&direction=asc" --jq '.[].number' 2>/dev/null); do
     # Creating a ref is atomic: only one worker gets it, the others move on to the next task.
