@@ -248,7 +248,7 @@ jobs:
     needs: [work, route]
     if: ${{ !cancelled() && inputs.ios && needs.route.outputs.shift != '1' }}
     # Prebuilt pods (Braze…) need the Swift 6.2+ runtime, i.e. Xcode 26+; the team builds with Xcode 27.
-    runs-on: macos-15-intel
+    runs-on: macos-26
     timeout-minutes: 150
     defaults: { run: { shell: bash } }
     env:

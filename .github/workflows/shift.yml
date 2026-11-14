@@ -11,7 +11,7 @@ on:
       minutes: { description: "Shift length in minutes (max 350 ≈ 6h job limit; a relay shift starts 20 min before the end)", default: "350" }
       ios_workers: { description: "iOS simulators (macOS free plan: max 5 at once)", default: "3" }
       android_workers: { description: "Android emulators (0 = none)", default: "3" }
-      ios_runner: { description: "iOS machine: macos-26 (Apple Silicon, 3 cores 7GB) or macos-15-intel (Intel, 4 cores 14GB)", default: "macos-15-intel" }
+      ios_runner: { description: "iOS machine: macos-26 (Apple Silicon, 3 cores 7GB) or macos-15-intel (Intel, 4 cores 14GB)", default: "macos-26" }
 
 permissions: {}
 
@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: { worker: "${{ fromJSON(needs.plan.outputs.ios) }}" }
-    runs-on: ${{ inputs.ios_runner || 'macos-15-intel' }}
+    runs-on: ${{ inputs.ios_runner || 'macos-26' }}
     timeout-minutes: 360
     defaults: { run: { shell: bash } }
     steps:
