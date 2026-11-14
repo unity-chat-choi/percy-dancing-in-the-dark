@@ -293,13 +293,13 @@ jobs:
           cat ctx/c-*.md > ctx/context.md; echo "context: $(echo ${KEYS:-$KEY} | wc -w | tr -d ' ') ticket(s)"
           python3 -I runner/scripts/figma-render.py ctx/context.md ctx/figma
 
-      # Boot the simulator and fetch Maestro in the background while deps install and the app builds.
+      # Fetch Maestro in the background. Do NOT pre-boot the simulator here: on the 3-core runner it slowed
+      # every later step 2-3x and the half-booted device failed simctl install (exit 149).
       - name: prewarm
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)" >/dev/null
           udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in sorted(d,reverse=True) if 'iOS' in r for x in d[r] if x['name'].startswith('iPhone') and x['name'].endswith('Pro')))")
           echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
-          nohup xcrun simctl boot "$udid" >/dev/null 2>&1 &
           nohup bash -c 'curl -Ls "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1; touch ~/.maestro-ok' >/dev/null 2>&1 &
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
@@ -364,8 +364,8 @@ jobs:
       - name: simulator
         run: |
           app=$(ls -d prebuilt/*.app | grep -v Extension | head -1)
-          xcrun simctl boot "$SIM_UDID" 2>/dev/null; xcrun simctl bootstatus "$SIM_UDID" -b >/dev/null
-          xcrun simctl install booted "$app"
+          xcrun simctl boot "$SIM_UDID" && xcrun simctl bootstatus "$SIM_UDID" -b >/dev/null
+          xcrun simctl install "$SIM_UDID" "$app" || { sleep 10; xcrun simctl install "$SIM_UDID" "$app"; }
           echo "APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")" >> "$GITHUB_ENV"
           for i in $(seq 90); do [ -f ~/.maestro-ok ] && break; sleep 2; done; echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
           echo "simulator ready"
