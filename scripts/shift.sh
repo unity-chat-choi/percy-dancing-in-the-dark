@@ -102,9 +102,10 @@ BASE=$(git rev-parse HEAD); DONE=0
 CLAIM_SHA=$(gh api "repos/$TASKS_REPO/commits/HEAD" --jq .sha)
 log "warm, taking tasks (worker ${WORKER:-1}, $(uname -m), warm-up $(( ($(date +%s) - START) / 60 )) min)"
 
-relay() {  # one worker (ios 1) starts the next shift while this one finishes, only if work is left
-  [ "$RELAYED" = 1 ] || [ "$P" != ios ] || [ "${WORKER:-1}" != 1 ] || [ "$(date +%s)" -lt "$RELAY_AT" ] && return
+relay() {  # one surviving worker (first to create the ref) starts the next shift, only if work is left
+  [ "$RELAYED" = 1 ] || [ "$(date +%s)" -lt "$RELAY_AT" ] && return
   RELAYED=1
+  gh api -X POST "repos/$TASKS_REPO/git/refs" -f ref="refs/claims/relay-$GITHUB_RUN_ID" -f sha="$CLAIM_SHA" >/dev/null 2>&1 || return
   [ -n "$(gh api "repos/$TASKS_REPO/issues?state=open&per_page=100" --jq '.[] | select([.labels[].name] | (index("ios-todo") or index("android-todo") or index("ios-running") or index("android-running") or index("running"))) | .number' 2>/dev/null)" ] || return
   gh workflow run shift.yml -R "$GITHUB_REPOSITORY" -f minutes=350 -f ios_workers="${IOS_WORKERS:-3}" -f android_workers="${ANDROID_WORKERS:-3}" >/dev/null 2>&1 \
     && log "relay: next shift started" || log "relay failed"
