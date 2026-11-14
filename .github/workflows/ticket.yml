@@ -418,6 +418,15 @@ jobs:
           TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
         run: bash runner/scripts/qc-report.sh ios "${{ job.status }}"
+      # Bugs found: the app is about to change, so stop the other platform's QC now and let the fix round start
+      # (it waits on this run: one run per task). Android usually finishes first, so iOS only tests the fixed app.
+      - name: stop for fix
+        if: ${{ !cancelled() && inputs.qc }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}" }
+        run: |
+          [ "$(cat ctx/qc-status 2>/dev/null)" = fixing ] || exit 0
+          echo "bugs to fix: stopping this run so the fix round starts now"
+          gh run cancel "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY"
 
   android:
     needs: [work, route]
@@ -598,6 +607,15 @@ jobs:
           TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
         run: bash runner/scripts/qc-report.sh android "${{ job.status }}"
+      # Bugs found: the app is about to change, so stop the other platform's QC now and let the fix round start
+      # (it waits on this run: one run per task). Android usually finishes first, so iOS only tests the fixed app.
+      - name: stop for fix
+        if: ${{ !cancelled() && inputs.qc }}
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}" }
+        run: |
+          [ "$(cat ctx/qc-status 2>/dev/null)" = fixing ] || exit 0
+          echo "bugs to fix: stopping this run so the fix round starts now"
+          gh run cancel "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY"
 
   # One report for both platforms: one task comment, one Telegram message, one HTML.
   report:
