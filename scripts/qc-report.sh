@@ -52,6 +52,7 @@ n, p, runner = sys.argv[1:4]
 v = json.load(open("ctx/verdict.json"))
 fix = [b for b in v.get("bugs") or [] if b.get("scope") in ("ticket", "blocking")]
 other = [b for b in v.get("bugs") or [] if b.get("scope") == "other"]
+confirm = [b for b in v.get("bugs") or [] if b.get("scope") == "confirm"]
 H = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json", "Content-Type": "application/json"}
 api = lambda path, data=None, method=None: json.load(urllib.request.urlopen(urllib.request.Request(
     f"https://api.github.com{path}", data=json.dumps(data).encode() if data is not None else None, headers=H, method=method), timeout=30) or [None])
@@ -63,6 +64,8 @@ repo = os.environ["TASKS_REPO"]
 issue = api(f"/repos/{repo}/issues/{n}")
 labels = [l["name"] for l in issue["labels"]]
 key = os.environ.get("KEY", "")
+if confirm:  # requirement conflicts: PO decides, never fixed automatically
+    tg(f"❓ {key}: {len(confirm)} điểm cần PO xác nhận\n" + "\n".join(f"• {b['title'][:80]}: {(b.get('detail') or '')[:160]}" for b in confirm[:3]))
 if other:
     tg(f"🐞 {key}: {len(other)} bug ngoài ticket (cần ticket Jira riêng)\n" + "\n".join(f"• {b['title'][:80]}" for b in other[:2]))
 if not fix:  # bugs of the ticket, or app bugs that block testing it, are fixed whatever the verdict (FAIL or BLOCKED)

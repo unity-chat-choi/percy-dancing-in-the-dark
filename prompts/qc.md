@@ -14,6 +14,10 @@ Build the test list first, in this order:
 3. Requirement: the ticket/story acceptance criteria, Confluence spec and the latest PO/BA comments (newer comments override older text).
 4. Figma: every frame.
 
+Priority when sources disagree: QC (test cases, QC bug comments) > PO/BA (latest comment wins) > ticket/story/Confluence/TDD > Figma.
+Figma is the reference for the LOOK only: layout, spacing, view sizes, font size/weight, colours, icons, light/dark/RTL. Its sample data, numbers and number formats are not requirements.
+When a requirement point is still unclear or contradictory after that order (e.g. TDD says one thing, Figma shows another and no QC/PO comment decides), do NOT pick a side: report it with scope "confirm" and one clear question for the PO.
+
 Requirement checklist: split step 3 into single checkable items (one acceptance criterion, one spec rule or one PO/BA decision each, with its source: ticket, story, Confluence page or comment id). Every item gets Pass / Fail / Không test được in the report. This is the core of QC: speed never justifies skipping an item.
 
 API ↔ UI (the platform that runs functional cases: Android; iOS only if a case is iOS-specific): for every screen in scope
@@ -42,7 +46,7 @@ Lessons: at the end write ../ctx/lessons-new.md, one line per lesson starting wi
 
 For every screen in scope check three modes and screenshot each into ../shots/ (max 12 files, `<n>-<screen>-<light|dark|rtl>.png`):
 - Light, Dark and RTL — the commands for each are under "Platform". If the app keeps its own language setting, change it in the app's settings instead.
-Open each evidence screenshot (a small copy, see Tokens) with Read and compare with Figma (layout, spacing, sizes, colours, fonts, texts, icons) and with the requirement. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
+Open each evidence screenshot (a small copy, see Tokens) with Read and compare with Figma for the look (layout, spacing, view sizes, font size/weight, colours, icons) and with the requirement for content and behaviour. RTL: mirrored layout, arrows/icons flipped, numbers and text aligned correctly, nothing clipped.
 Use real staging data; if a screen has no data on staging, say so instead of guessing. Do not change code, do not commit, do not call external services other than read-only GETs to the app's staging API, never print secrets.
 
 Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
@@ -52,8 +56,8 @@ Same data on both platforms: if ../ctx/peer-test-data.json exists, the other pla
 
 Definition of done (the worker decides with this file): ../ctx/verdict.json — write it EARLY (after the first screen) and update it as you go, so a time-out still leaves your findings.
 {"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>",
- "bugs":[{"title":"<short>","scope":"ticket|blocking|other","where":"<file/screen>","detail":"<steps, expected vs actual, screenshot name>"}]}
-- scope: "ticket" = this ticket's own change is wrong; "blocking" = an app bug that stops this ticket from working/being tested (e.g. wrong API version for its screen); "other" = unrelated area. Bugs with scope ticket/blocking are fixed automatically in the next round, so describe them precisely.
+ "bugs":[{"title":"<short>","scope":"ticket|blocking|confirm|other","where":"<file/screen>","detail":"<steps, expected vs actual, screenshot name>"}]}
+- scope: "ticket" = this ticket's own change is wrong; "blocking" = an app bug that stops this ticket from working/being tested (e.g. wrong API version for its screen); "confirm" = requirement unclear or sources contradict, PO must decide (put the question in detail; never auto-fixed); "other" = unrelated area. Bugs with scope ticket/blocking are fixed automatically in the next round, so describe them precisely.
 - PASS = every case and requirement item checked in light, dark and RTL, API ↔ UI matches, and matches Figma. FAIL = checked, and you found bugs (listed in the report).
 - A mode you could not reach is false, and then result must be BLOCKED: the task goes back to the queue and the next run continues from your lessons. Never mark PASS/FAIL with a mode missing.
 
@@ -63,6 +67,7 @@ Write ../ctx/qc-report.md in Vietnamese, short, for Telegram (no markdown tables
 ## Bug QC cũ — đã hết / vẫn còn
 ## Requirement — one line each: <item> (<source>) — Pass/Fail/Không test được — lý do ngắn
 ## API ↔ UI — endpoint đã gọi, field nào khớp / lệch (giá trị API vs UI)
+## Cần PO xác nhận — mỗi điểm 1 dòng: nguồn nào nói gì, câu hỏi cho PO
 ## So Figma + requirement — khớp / lệch cụ thể, kèm tên ảnh
 ## Dark / Light / RTL — vấn đề riêng từng mode
 ## Không test được — và lý do
