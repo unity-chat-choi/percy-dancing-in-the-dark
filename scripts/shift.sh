@@ -18,7 +18,7 @@ build_app() {  # full or incremental build + install
     (cd ios && bundle exec pod install >/tmp/pod.log 2>&1) || { log "pod install failed"; return 1; }
     xcodebuild -workspace ios/uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
       -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-      EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet >/tmp/build.log 2>&1 \
+      EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet >/tmp/build.log 2>&1 \
       || { log "ios build failed"; return 1; }
     APP=$(ls -d "$W"/build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
     xcrun simctl install booted "$APP"
@@ -101,7 +101,7 @@ relay() {  # one worker (ios 1) starts the next shift while this one finishes, o
   [ "$RELAYED" = 1 ] || [ "$P" != ios ] || [ "${WORKER:-1}" != 1 ] || [ "$(date +%s)" -lt "$RELAY_AT" ] && return
   RELAYED=1
   [ -n "$(gh api "repos/$TASKS_REPO/issues?state=open&per_page=100" --jq '.[] | select([.labels[].name] | (index("ios-todo") or index("android-todo") or index("ios-running") or index("android-running") or index("running"))) | .number' 2>/dev/null)" ] || return
-  gh workflow run shift.yml -R "$GITHUB_REPOSITORY" -f minutes=350 -f ios_workers="${IOS_WORKERS:-2}" -f android_workers="${ANDROID_WORKERS:-3}" >/dev/null 2>&1 \
+  gh workflow run shift.yml -R "$GITHUB_REPOSITORY" -f minutes=350 -f ios_workers="${IOS_WORKERS:-3}" -f android_workers="${ANDROID_WORKERS:-3}" >/dev/null 2>&1 \
     && log "relay: next shift started" || log "relay failed"
 }
 

@@ -276,7 +276,7 @@ jobs:
           xcodebuild -workspace uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES EXCLUDED_ARCHS=x86_64 \
-            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet > /tmp/build.log 2>&1 \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf -quiet > /tmp/build.log 2>&1 \
             && echo "build ok" || {
               echo "build failed: $(grep -c ' error: ' /tmp/build.log) errors"
               # Private report only (public log prints counts): compiler errors + the linker's real reason.

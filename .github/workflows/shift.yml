@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       minutes: { description: "Shift length in minutes (max 350 ≈ 6h job limit; a relay shift starts 20 min before the end)", default: "350" }
-      ios_workers: { description: "iOS simulators (macOS free plan: max 5 at once)", default: "2" }
+      ios_workers: { description: "iOS simulators (macOS free plan: max 5 at once)", default: "3" }
       android_workers: { description: "Android emulators", default: "3" }
 
 permissions: {}
@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IOS_WORKERS: ${{ inputs.ios_workers || '2' }}
+  IOS_WORKERS: ${{ inputs.ios_workers || '3' }}
   ANDROID_WORKERS: ${{ inputs.android_workers || '3' }}
   GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
   GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
@@ -49,7 +49,7 @@ jobs:
       - id: p
         run: |
           r() { python3 -c "import json,sys;print(json.dumps(list(range(1,max(1,min(int(sys.argv[1]),$2))+1))))" "$1"; }
-          echo "ios=$(r '${{ inputs.ios_workers || '2' }}' 5)" >> "$GITHUB_OUTPUT"
+          echo "ios=$(r '${{ inputs.ios_workers || '3' }}' 5)" >> "$GITHUB_OUTPUT"
           echo "android=$(r '${{ inputs.android_workers || '3' }}' 8)" >> "$GITHUB_OUTPUT"
 
   ios:
