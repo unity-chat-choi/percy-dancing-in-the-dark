@@ -177,6 +177,12 @@ while [ "$(date +%s)" -lt "$END" ]; do
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
   fi
   kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
+  # Account limit hit (or no account free): not the app's fault, so put the task back without using a try.
+  if [ -z "$ACC" ] || grep -qiE "hit your (session|usage) limit|usage limit reached|rate_limit" ctx/qc.json 2>/dev/null; then
+    label POST "$N" "" "$P-todo"; label DELETE "$N" "$P-running"
+    gh api -X DELETE "repos/$TASKS_REPO/git/refs/claims/$N-$P" >/dev/null 2>&1
+    step "$N" "Hết lượt Claude, xếp hàng lại (không tính lần thử)"; log "claude limit: requeued"; sleep 600; continue
+  fi
   python3 -I "$R/lessons.py" add ctx/lessons-new.md 2>/dev/null || true
   step "$N" "Lưu kết quả QC"
   bash "$R/qc-report.sh" "$P" "shift"   # labels: <P>-done, or back to <P>-todo (retry), or blocked

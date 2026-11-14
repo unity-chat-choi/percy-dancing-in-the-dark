@@ -1,6 +1,7 @@
 """Pick which Claude account (CLAUDE_CODE_OAUTH_TOKEN_1..3) a runner job should use.
 
-Skip an account when it has used >= 90% of its weekly quota and the weekly reset is more than 1 day away.
+Skip an account when it has used >= 90% of its weekly quota and the weekly reset is more than 1 day away,
+or >= 95% of its 5-hour session.
 Among the rest, take the preferred one if given (argv[1]), else the one with the most weekly quota left.
 Quota comes from the rate-limit headers of a 1-token Haiku call. Prints the account number, or exits 1 if none.
 """
@@ -23,7 +24,8 @@ def quota(token):
         h = e.headers
     used = h.get("anthropic-ratelimit-unified-7d-utilization")
     reset = h.get("anthropic-ratelimit-unified-7d-reset")
-    return (float(used) if used else None), (int(reset) if reset else None)
+    five = h.get("anthropic-ratelimit-unified-5h-utilization")
+    return (float(used) if used else None), (int(reset) if reset else None), (float(five) if five else 0.0)
 
 
 pref = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in "123" else None
@@ -32,9 +34,10 @@ for n in "123":
     tok = os.environ.get(f"CLAUDE_CODE_OAUTH_TOKEN_{n}")
     if not tok:
         continue
-    used, reset = quota(tok)
+    used, reset, five = quota(tok)
     days = (reset - time.time()) / 86400 if reset else None
-    blocked = used is not None and used >= WEEK_PCT and (days is None or days > WEEK_DAYS)
+    # The 5-hour session limit kills a run after one turn, so a nearly full session counts as blocked too.
+    blocked = (used is not None and used >= WEEK_PCT and (days is None or days > WEEK_DAYS)) or five >= 0.95
     print(f"account {n}: week {used if used is not None else '?'} reset in {days:.1f}d{' SKIP' if blocked else ''}"
           if days is not None else f"account {n}: week {used} reset ?{' SKIP' if blocked else ''}", file=sys.stderr)
     if not blocked:
