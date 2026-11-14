@@ -16,19 +16,18 @@ log() { echo "[$(date +%H:%M)] $*"; }
 build_app() {  # full or incremental build + install
   if [ "$P" = ios ]; then
     (cd ios && bundle exec pod install >/tmp/pod.log 2>&1) || { log "pod install failed"; return 1; }
-    xcodebuild -workspace ios/uniscore.xcworkspace -scheme uniscoreStag -configuration DebugStag -sdk iphonesimulator \
+    xcodebuild -workspace ios/uniscore.xcworkspace -scheme uniscoreStag -configuration ReleaseStag -sdk iphonesimulator \
       -destination 'generic/platform=iOS Simulator' -derivedDataPath "$W/build" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
       EXCLUDED_ARCHS=x86_64 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet >/tmp/build.log 2>&1 \
       || { log "ios build failed"; return 1; }
-    APP=$(ls -d "$W"/build/Build/Products/DebugStag-iphonesimulator/*.app | grep -v Extension | head -1)
+    APP=$(ls -d "$W"/build/Build/Products/ReleaseStag-iphonesimulator/*.app | grep -v Extension | head -1)
     xcrun simctl install booted "$APP"
     APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
   else
-    (cd android && ENVFILE=.env.staging ./gradlew :app:assembleStagingDebug \
+    (cd android && ENVFILE=.env.staging ./gradlew :app:assembleStagingRelease \
       --build-cache -q >/tmp/build.log 2>&1) || { log "android build failed"; return 1; }
-    adb install -r "$(ls android/app/build/outputs/apk/staging/debug/*.apk | head -1)" >/dev/null
+    adb install -r "$(ls android/app/build/outputs/apk/staging/release/*.apk | head -1)" >/dev/null
     APP_ID=com.unity.uniscore.stag
-    adb reverse tcp:8081 tcp:8081 >/dev/null
   fi
   export APP_ID; log "app built + installed ($P)"
 }
@@ -75,7 +74,6 @@ if [ "$P" = ios ]; then
   xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b >/dev/null
   (cd ios && bundle install --quiet >/dev/null 2>&1)
 fi
-(npx react-native start --port 8081 >/tmp/metro.log 2>&1 &)
 alert() {  # private Telegram group (General): build broken on app-develop, etc.
   python3 -I - "$1" <<'PYA'
 import json, os, sys, urllib.request
@@ -136,8 +134,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
   REF="$BRANCH"; gl ls-remote --exit-code --heads "$REPO_URL" "runner/$BRANCH" >/dev/null 2>&1 && REF="runner/$BRANCH"
   step "$N" "Lấy code nhánh $([ "$REF" = "$BRANCH" ] && echo của dev || echo runner)"
   gl fetch -q --depth 50 origin "$REF" && git checkout -q -f FETCH_HEAD && git clean -qfd
-  if git diff --name-only "$BASE" HEAD 2>/dev/null | grep -qE '^(ios/|android/|package\.json|yarn\.lock|patches/)'; then
-    log "native change: rebuilding"; step "$N" "Có đổi native: build lại app"
+  if [ "$(git rev-parse HEAD)" != "$BASE" ]; then  # Release build bundles the JS, so any change needs an (incremental) rebuild
+    log "rebuilding for this branch"; step "$N" "Build bản Release cho nhánh này"
     yarn install --ignore-engines >/dev/null 2>&1
     build_app || { echo "Build $P lỗi (rebuild trong ca)." > "$W/ctx/build-errors.txt"; }
     BASE=$(git rev-parse HEAD)
@@ -151,7 +149,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   ACC=$(python3 -I "$R/pick-account.py" "${ACCOUNT:-auto}" 2>/dev/null)
   TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_${ACC:-1}"
   if [ -n "$ACC" ] && [ ! -s ctx/build-errors.txt ]; then
-    prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a Debug build served by Metro on port 8081; after switching mode just relaunch it."
+    prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a staging Release build (JS bundled); after switching mode relaunch it."
     python3 -I "$R/lessons.py" get ctx/lessons.md >/dev/null
     # same data as the other platform, when it went first
     python3 -I "$R/task-files.py" get "$N" "$O" ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json
@@ -159,7 +157,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
     # Mirror Claude's own progress lines (../ctx/progress.txt) every 45s while it works.
     ( last=""; while sleep 45; do l=$(tail -1 ctx/progress.txt 2>/dev/null); [ -n "$l" ] && [ "$l" != "$last" ] && { step "$N" "QC: $l"; last="$l"; }; done ) & MIRROR=$!
     # Claude gets only its own token: GitLab/Jira/Figma/GitHub secrets are not in its environment.
-    (cd app && perl -e 'alarm shift; exec @ARGV' 5400 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
+    (cd app && perl -e 'alarm shift; exec @ARGV' 9000 env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" \
       CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$prompt" --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
       --add-dir ../ctx --add-dir ../shots --output-format json \
       --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true

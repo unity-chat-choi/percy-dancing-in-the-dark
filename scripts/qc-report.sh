@@ -65,7 +65,7 @@ labels = [l["name"] for l in issue["labels"]]
 key = os.environ.get("KEY", "")
 if other:
     tg(f"🐞 QC {p} thấy bug NGOÀI ticket ({key}, task #{n}) — cần ticket Jira riêng nếu muốn sửa:\n" + "\n".join(f"• {b['title']} ({b.get('where','')})" for b in other))
-if v.get("result") != "FAIL" or not fix:
+if not fix:  # bugs of the ticket, or app bugs that block testing it, are fixed whatever the verdict (FAIL or BLOCKED)
     sys.exit(0)
 rounds = sum(1 for l in labels if l.startswith("fix-round-"))
 if rounds >= 2:

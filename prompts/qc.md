@@ -36,7 +36,7 @@ Also write ../ctx/pairs.json, one object per screen, for the side-by-side HTML:
 
 Same data on both platforms: if ../ctx/peer-test-data.json exists, the other platform already tested with that data (league, season, team, match, screens): use EXACTLY the same data so iOS and Android can be compared. Always write ../ctx/test-data.json with the data you used: {"screens":[{"name":"...","how":"deeplink/navigation","data":{"league":"id/name","season":"...","other":"..."}}]}.
 
-Definition of done (the worker decides with this file, write it last): ../ctx/verdict.json
+Definition of done (the worker decides with this file): ../ctx/verdict.json — write it EARLY (after the first screen) and update it as you go, so a time-out still leaves your findings.
 {"result":"PASS|FAIL|BLOCKED","modes":{"light":true|false,"dark":true|false,"rtl":true|false},"figma":true|false,"blocker":"<if BLOCKED: what blocks you and what you already tried>",
  "bugs":[{"title":"<short>","scope":"ticket|blocking|other","where":"<file/screen>","detail":"<steps, expected vs actual, screenshot name>"}]}
 - scope: "ticket" = this ticket's own change is wrong; "blocking" = an app bug that stops this ticket from working/being tested (e.g. wrong API version for its screen); "other" = unrelated area. Bugs with scope ticket/blocking are fixed automatically in the next round, so describe them precisely.
