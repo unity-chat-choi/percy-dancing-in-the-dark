@@ -37,7 +37,7 @@ for n in "123":
     used, reset, five = quota(tok)
     days = (reset - time.time()) / 86400 if reset else None
     # The 5-hour session limit kills a run after one turn, so a nearly full session counts as blocked too.
-    blocked = (used is not None and used >= WEEK_PCT and (days is None or days > WEEK_DAYS)) or five >= 0.95
+    blocked = (used is not None and used >= WEEK_PCT and (days is None or days > WEEK_DAYS)) or five >= 0.95 or (used or 0) >= 0.98
     print(f"account {n}: week {used if used is not None else '?'} reset in {days:.1f}d{' SKIP' if blocked else ''}"
           if days is not None else f"account {n}: week {used} reset ?{' SKIP' if blocked else ''}", file=sys.stderr)
     if not blocked:
