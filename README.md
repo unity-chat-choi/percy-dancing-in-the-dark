@@ -65,6 +65,9 @@ scripts/task.sh <nhánh RN> [account 1-3|auto] [model] [ghi chú...]
 Tạo task trong repo private (tiêu đề = mã Jira + tên ticket), rồi chạy `ticket` với số task. Tài khoản Claude chọn tự động (`pick-account.py`): bỏ qua tài khoản đã dùng ≥ 90% quota tuần mà còn hơn 1 ngày mới reset. Runner luôn làm theo ticket Jira: gom context (`ticket-context.py`) và Figma trước khi code.
 
 ### Xong task → Jira (theo cú pháp team)
+Tự động: task có **cả iOS và Android PASS** được gắn nhãn `ship`. Trên Mac, `ship.sh` (gọi từ `trigger.sh` 5 phút/lần) đưa code runner lên nhánh (chỉ fast-forward), mở MR RN kèm ảnh, gửi port Kotlin (cần SSO của trang port, 24 giờ/lần), rồi xếp hàng cho `port-watch.sh`. Khi có MR Kotlin, `port-watch.sh` comment Jira kèm ảnh và chuyển REVIEW CODE; ticket đang IN TESTING thì đi qua FIXING. Bước nào chưa chạy được thì giữ nhãn `ship` và báo trên macOS.
+
+Làm tay:
 Ảnh app (light/dark/RTL) và Figma của mỗi task nằm ngay trong comment báo cáo của task (repo private), kèm album trên Telegram.
 Khi đã mở MR RN và bấm port Kotlin:
 ```
