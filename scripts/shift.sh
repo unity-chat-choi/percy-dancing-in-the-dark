@@ -210,6 +210,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
       step "$N" "Tài khoản $ACC hết lượt → chuyển sang tài khoản $NEXT"
       ACC=$NEXT; TRIED="$TRIED$ACC"
     done
+    (cd app && env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" bash "$R/qc-wrapup.sh" "${MODEL:-sonnet}") || true
   fi
   kill "${MIRROR:-0}" 2>/dev/null; MIRROR=""
   # Account limit hit (or no account free): not the app's fault, so put the task back without using a try.

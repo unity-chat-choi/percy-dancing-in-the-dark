@@ -13,4 +13,5 @@ perl -e 'alarm shift; exec @ARGV' 2700 claude -p "$prompt" --model "$MODEL" --da
   --add-dir ../ctx --add-dir ../shots --output-format stream-json --verbose \
   --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
   2>/dev/null | python3 -u ../runner/scripts/qc-timeline.py ../ctx || echo "claude exited non-zero"
+bash ../runner/scripts/qc-wrapup.sh "$MODEL"
 echo "shots: $(ls ../shots | wc -l)"; head -9 ../ctx/qc-timeline.txt 2>/dev/null || true

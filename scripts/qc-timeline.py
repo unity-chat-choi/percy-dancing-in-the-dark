@@ -49,6 +49,8 @@ for raw in sys.stdin:
     except ValueError:
         continue
     now = time.time()
+    if ev.get("session_id") and not os.path.exists(os.path.join(ctx, "qc-session")):  # for qc-wrapup.sh
+        open(os.path.join(ctx, "qc-session"), "w").write(ev["session_id"])
     if ev.get("type") == "assistant":
         # Time since the previous event that ended in a model turn = thinking/writing.
         cat_s["model"] = cat_s.get("model", 0) + (now - last)
