@@ -4,7 +4,7 @@ Rules (JQL), each item reported once (state in ~/.cache/percy-scan/state.json):
   new_task   assigned to me / I'm Engineer, in an open sprint, not a Bug, not seen before
   new_bug    Bug assigned to me / I'm Engineer, not seen before
   qc_back    my ticket moved to FIXING / Review fail since the last scan (QC sent it back)
-  mention    a new comment that @mentions me
+  comment    a new comment by someone else on my tickets (🔔 when it @mentions me), with link + time
 Each report goes to the ticket's squad topic with buttons: ▶️ Giao runner làm (run:<KEY>) / 👀 Để sau (skip:<KEY>).
 The daily poll handles the buttons. First run only records the current state (no flood).
 Reads ~/.config/cutcut/uniscore-runner-secrets.env. LOCAL=1 prints instead of sending.
@@ -25,6 +25,7 @@ STATE = os.environ.get("SCAN_STATE") or f"{HOME}/.cache/percy-scan/state.json"
 H = (lambda x: hashlib.sha1(str(x).encode()).hexdigest()[:12]) if os.environ.get("SCAN_HASH") == "1" else str
 MINE = "(assignee = currentUser() OR cf[10075] = currentUser())"
 BACK = {"fixing", "review fail"}
+VN = dt.timezone(dt.timedelta(hours=7))
 
 
 def get(url, headers=AUTH):
@@ -143,18 +144,22 @@ def main():
             out.append((f, k, f"↩️ <b>QC trả về</b> · {link(k)} {esc(f['summary'])}\n<i>{esc(status[H(k)])} → {esc(s)}</i>", True))
         status[H(k)] = s
 
-    # mentions: comments on my tickets updated in the last hour
+    # every new comment by someone else on my tickets (updated in the last hour), with link + time
     for i in jql(f"{MINE} AND updated >= -60m", "summary,customfield_10001", 30):
         k, f = i["key"], i["fields"]
         for c in get(f"{JIRA}/rest/api/3/issue/{k}/comment?orderBy=-created&maxResults=10").get("comments", []):
             if H(c["id"]) in comments:
                 continue
             comments.add(H(c["id"]))
-            if first or c["author"]["accountId"] == me or me not in json.dumps(c["body"]):
+            if first or c["author"]["accountId"] == me:
                 continue
             t = re.sub(r"\s+", " ", adf_text(c["body"])).strip()
-            out.append((f, k, f'🔔 <b>{esc(c["author"]["displayName"])}</b> tag bạn · '
-                              f'<a href="{JIRA}/browse/{k}?focusedCommentId={c["id"]}">{k}</a>\n{esc(t[:300])}', False))
+            at = dt.datetime.strptime(c["created"][:19], "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=dt.datetime.strptime(c["created"][-5:], "%z").tzinfo).astimezone(VN).strftime("%H:%M %d/%m")
+            what = "tag bạn" if me in json.dumps(c["body"]) else "comment"
+            out.append((f, k, f'{"🔔" if what == "tag bạn" else "💬"} <b>{esc(c["author"]["displayName"])}</b> {what} · '
+                              f'<a href="{JIRA}/browse/{k}?focusedCommentId={c["id"]}">{k}</a> · {at}\n'
+                              f'<i>{esc(f["summary"][:80])}</i>\n{esc(t[:300])}', False))
 
     started = auto_start([(f, k) for f, k, _, b in out if b]) if ENV.get("TASKS_PAT") and not first else []
     grouped = {k for _, members, _ in started for _, k in members}

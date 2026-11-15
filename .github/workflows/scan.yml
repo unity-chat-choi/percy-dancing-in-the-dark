@@ -1,9 +1,9 @@
 name: scan
 # Schedules re-register on a push that touches this file.
-# Rule-based Jira watcher (no LLM): new tasks/bugs, QC send-backs, @mentions → Telegram (only when something is new).
+# Rule-based Jira watcher (no LLM): new tasks/bugs, QC send-backs, new comments (link + time) → Telegram (only when something is new).
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
