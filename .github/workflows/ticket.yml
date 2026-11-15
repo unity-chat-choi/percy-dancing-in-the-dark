@@ -665,5 +665,5 @@ jobs:
           python3 -I runner/scripts/merge-report.py "$KEY · QC iOS + Android · task #$ISSUE" ctx/figma qc "$ISSUE" out
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/comments" -F body=@out/comment.md >/dev/null
           python3 -I runner/scripts/tg-report.py out/telegram.md ctx/context.md "$KEY · QC iOS + Android · task #$ISSUE"
-          python3 -I runner/scripts/tg-doc.py out/report.html ctx/context.md "$KEY · so sánh Figma | iOS | Android (mở file HTML)"
+          [ ! -s out/report.html ] || python3 -I runner/scripts/tg-doc.py out/report.html ctx/context.md "$KEY · màn lệch: Figma | iOS | Android (HTML)"
 

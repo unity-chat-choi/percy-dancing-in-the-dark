@@ -5,7 +5,7 @@ Usage: merge-report.py <title> <figma dir> <qc root> <issue> <out dir>
 Writes <out>/report.html (Figma | Light | Dark | RTL per screen and platform), <out>/comment.md (with in-repo
 image links, for the private task) and <out>/telegram.md (text only).
 """
-import base64, html, json, os, re, sys
+import base64, html, json, os, re, subprocess, sys
 
 title, figma_dir, root, issue, out = sys.argv[1:6]
 PLATS = [p for p in ("ios", "android") if os.path.isfile(os.path.join(root, p, "qc-report.md"))]
@@ -49,7 +49,12 @@ def color(v):
 def img(path):
     if not path or not os.path.isfile(path):
         return '<div class="none">—</div>'
-    return f'<img src="data:image/png;base64,{base64.b64encode(open(path, "rb").read()).decode()}">'
+    # Keep the report light (Telegram rejects >50MB, Percy only needs results): 400px JPEG, keep the full PNG in the task repo.
+    try:
+        data = subprocess.run(["convert", path, "-resize", "400x>", "-quality", "60", "jpg:-"], capture_output=True, timeout=30, check=True).stdout
+        return f'<img src="data:image/jpeg;base64,{base64.b64encode(data).decode()}">'
+    except (OSError, subprocess.SubprocessError):
+        return f'<img src="data:image/png;base64,{base64.b64encode(open(path, "rb").read()).decode()}">'
 
 
 def key(s):
@@ -64,7 +69,10 @@ for p, d in data.items():
         e["rows"][p] = pr
 
 sections = []
+ok = lambda pr: (pr.get("verdict") or "").strip().lower() in ("khớp", "khop", "match", "pass")
 for e in screens.values():
+    if all(ok(pr) for pr in e["rows"].values()):
+        continue  # only screens that differ or could not be tested go into the HTML; matches are listed in the text
     fig = os.path.join(figma_dir, e["figma"]) if e["figma"] else (os.path.join(figma_dir, figmas[0]) if figmas else "")
     rows = []
     for p in PLATS:
@@ -115,9 +123,9 @@ section{{background:var(--card);border:1px solid var(--line);border-radius:12px;
 img{{width:100%;border-radius:8px;border:1px solid var(--line)}} .none{{padding:40px 8px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:8px}}
 .tag,.notes{{color:var(--mut);font-size:13px}} .notes{{margin:2px 0 6px}} details{{margin-top:16px}} summary{{font-weight:700;cursor:pointer}}
 </style></head><body><main><h1>{esc(title)}</h1>{badges}
-<h2>Figma</h2><div class="figs">{''.join(f'<figure><figcaption>{esc(f)}</figcaption>{img(os.path.join(figma_dir, f))}</figure>' for f in figmas) or '<p>Ticket không có link Figma.</p>'}</div>
-<h2>So sánh từng màn (Figma | Light | Dark | RTL)</h2>{''.join(sections) or '<p>Không có ảnh chụp.</p>'}{texts}</main></body></html>"""
-open(os.path.join(out, "report.html"), "w").write(page)
+<h2>Màn lệch / chưa test được (Figma | Light | Dark | RTL)</h2>{''.join(sections)}{texts}</main></body></html>"""
+if sections:  # everything matches: no HTML, the text result is enough
+    open(os.path.join(out, "report.html"), "w").write(page)
 
 head = f"# {title}\n" + " · ".join(f"**{NAME[p]}: {d['verdict']}**" for p, d in data.items()) + "\n"
 full = head + "".join(f"\n## {NAME[p]}\n" + re.sub(r"^## Kết quả:[^\n]*\n", "", d["md"], flags=re.M) for p, d in data.items())

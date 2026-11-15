@@ -63,7 +63,7 @@ send_report() {  # <issue> <reported|reported-partial>: merged report of whateve
   python3 -I "$R/merge-report.py" "$key · QC iOS + Android · task #$n$tag" ctx/figma qc "$n" out >/dev/null
   gh api -X POST "repos/$TASKS_REPO/issues/$n/comments" -F body=@out/comment.md >/dev/null
   python3 -I "$R/tg-report.py" out/telegram.md ctx/context.md "$key · QC · task #$n$tag" >/dev/null
-  python3 -I "$R/tg-doc.py" out/report.html ctx/context.md "$key · so sánh Figma | iOS | Android (mở file HTML)" >/dev/null
+  [ ! -s out/report.html ] || python3 -I "$R/tg-doc.py" out/report.html ctx/context.md "$key · màn lệch: Figma | iOS | Android (HTML)" >/dev/null
   label DELETE "$n" "reported-partial"; label POST "$n" "" "$mark"
   rm -rf qc out
 }
