@@ -400,7 +400,7 @@ jobs:
           npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
           date +%s > ../ctx/qc-start
           prompt="$(cat ../runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" ../runner/prompts/qc-ios.md)"$'\n\n'"Ticket: $KEY."
-          perl -e 'alarm shift; exec @ARGV' 2100 claude -p "$prompt" --model "${{ inputs.model == 'auto' && 'sonnet' || inputs.model }}" --dangerously-skip-permissions \
+          perl -e 'alarm shift; exec @ARGV' 3600 claude -p "$prompt" --model "${{ inputs.model == 'auto' && 'sonnet' || inputs.model }}" --dangerously-skip-permissions \
             --add-dir ../ctx --add-dir ../shots --output-format stream-json --verbose \
             --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch \
             2>/dev/null | python3 -u ../runner/scripts/qc-timeline.py ../ctx || echo "claude exited non-zero"

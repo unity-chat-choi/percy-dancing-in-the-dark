@@ -198,7 +198,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
     date +%s > "$W/ctx/qc-start"
     while :; do
       TOKEN_VAR="CLAUDE_CODE_OAUTH_TOKEN_$ACC"
-      LEFT=$(( HARD - $(date +%s) )); QC_MAX=$([ "$P" = ios ] && echo 2100 || echo 2700); QC_BUDGET=$(( LEFT - 600 < QC_MAX ? LEFT - 600 : QC_MAX )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none
+      LEFT=$(( HARD - $(date +%s) )); QC_MAX=$([ "$P" = ios ] && echo 3600 || echo 2700); QC_BUDGET=$(( LEFT - 600 < QC_MAX ? LEFT - 600 : QC_MAX )); [ "$QC_BUDGET" -lt 60 ] && QC_BUDGET=60  # alarm 0 = none
       (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" APP_ID="$APP_ID" \
         CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$MSG" \
         ${RESUME:+--resume "$RESUME"} --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
