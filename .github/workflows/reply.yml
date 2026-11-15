@@ -1,0 +1,91 @@
+name: reply
+# One new Jira comment (from scan.py): Claude (Opus, read-only) reads the ticket, all comments and the code,
+# then scripts/reply-act.py replies on Jira, starts a fix on the runner, or asks Percy on Telegram.
+# Public repo: inputs are public, so scan.py stores {key, comment, own} in the private task repo (replies/<ref>.json)
+# and passes only the opaque ref. The log shows the action only.
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { description: "replies/<ref>.json in the private task repo", required: true }
+      dry: { description: "Telegram only: no Jira reply, no fix run", type: boolean, default: false }
+
+permissions:
+  contents: read
+  actions: write   # a fix starts ticket.yml
+
+concurrency: reply-${{ inputs.ref }}
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults: { run: { shell: bash } }
+    env:
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    steps:
+      - name: load
+        env: { GH_TOKEN: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}", REF: "${{ inputs.ref }}" }
+        run: |
+          j=$(gh api "repos/$TASKS_REPO/contents/replies/$REF.json" -H "Accept: application/vnd.github.raw")
+          for v in key comment own; do x=$(jq -r ".$v" <<<"$j"); echo "::add-mask::$x"
+            echo "$( [ $v = key ] && echo KEY || { [ $v = comment ] && echo COMMENT_ID || echo OWN; } )=$x" >> "$GITHUB_ENV"; done
+      - uses: actions/checkout@v4
+        with: { path: runner }
+      - name: context
+        run: |
+          mkdir -p ctx
+          python3 -I runner/scripts/ticket-context.py "$KEY" ctx/context.md >/dev/null
+          python3 -I - <<'EOF'
+          import os, re, sys
+          sys.path.insert(0, "runner/scripts"); import scan
+          c = scan.get(f"{scan.JIRA}/rest/api/3/issue/{os.environ['KEY']}/comment/{os.environ['COMMENT_ID']}")
+          open("ctx/comment.md", "w").write(f"ticket: {os.environ['KEY']}\nown: {'yes' if os.environ['OWN'] == '1' else 'no'}\n"
+              f"author: {c['author']['displayName']}\ncreated: {c['created']}\n\n{scan.adf_text(c['body'])}\n")
+          EOF
+      - name: clone
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+        run: |
+          auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 -w0)"
+          proj=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$GITLAB_PROJECT")
+          br=$(curl -fsS -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://gitlab.com/api/v4/projects/$proj/repository/branches?search=$KEY&per_page=20" \
+            | python3 -c 'import json,sys;b=[x["name"] for x in json.load(sys.stdin) if "/percy/" in x["name"] and not x["name"].startswith("runner/")];print(b[0] if b else "app-develop")')
+          echo "::add-mask::$br"
+          git -c http.extraHeader="$auth" clone -q --depth 1 --branch "$br" "https://gitlab.com/$GITLAB_PROJECT.git" app
+      - name: pick account
+        id: pick
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          CLAUDE_CODE_OAUTH_TOKEN_2: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_2 }}
+          CLAUDE_CODE_OAUTH_TOKEN_3: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_3 }}
+        run: echo "n=$(python3 -I runner/scripts/pick-account.py auto)" >> "$GITHUB_OUTPUT"
+      - name: claude
+        working-directory: app
+        env:
+          T1: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
+          T2: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_2 }}
+          T3: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_3 }}
+          ACC: ${{ steps.pick.outputs.n }}
+        run: |
+          npm i -g --silent @anthropic-ai/claude-code >/dev/null 2>&1
+          tv="T$ACC"
+          CLAUDE_CODE_OAUTH_TOKEN="${!tv}" T1= T2= T3= timeout 1200 claude -p "$(cat ../runner/prompts/reply.md)" --model opus \
+            --dangerously-skip-permissions --add-dir ../ctx --output-format json \
+            --disallowedTools Edit Write NotebookEdit "Bash(git push*)" "Bash(git commit*)" "Bash(curl*)" "Bash(wget*)" \
+            > ../ctx/claude.json 2>/dev/null || echo "claude exited non-zero"
+      - name: act
+        if: ${{ !cancelled() }}
+        env:
+          TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+          TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+          TASKS_PAT: ${{ secrets.TASKS_PAT }}
+          TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+          DISPATCH_TOKEN: ${{ github.token }}
+          DRY: ${{ inputs.dry && '1' || '' }}
+        run: python3 -I runner/scripts/reply-act.py ctx

@@ -4,7 +4,8 @@ Rules (JQL), each item reported once (state in ~/.cache/percy-scan/state.json):
   new_task   any open ticket I'm assignee / Engineer / reporter / watcher of, not seen before
   new_bug    same, type Bug (only my own sprint tickets and bugs are auto-started on the runner)
   qc_back    my ticket moved to FIXING / Review fail since the last scan (QC sent it back)
-  comment    a new comment by someone else on my tickets (🔔 when it @mentions me), with link + time
+  comment    a new comment by someone else on my tickets (🔔 when it @mentions me), with link + time;
+             on my own work tickets or when it tags me, reply.yml lets Claude answer / fix / ask me
 Each report goes to the ticket's squad topic with buttons: ▶️ Giao runner làm (run:<KEY>) / 👀 Để sau (skip:<KEY>).
 The daily poll handles the buttons. First run only records the current state (no flood).
 Reads ~/.config/cutcut/uniscore-runner-secrets.env. LOCAL=1 prints instead of sending.
@@ -117,6 +118,19 @@ def auto_start(items):
     return started
 
 
+def queue_reply(k, cid, own):
+    """Hand one comment to reply.yml. Inputs of a public repo are public: the key + comment id go to the private repo."""
+    ref = hashlib.sha1(f"{k}:{cid}".encode()).hexdigest()[:16]
+    gh = {"Authorization": f"Bearer {ENV['TASKS_PAT']}", "Accept": "application/vnd.github+json"}
+    body = base64.b64encode(json.dumps({"key": k, "comment": cid, "own": "1" if own else "0"}).encode()).decode()
+    req = urllib.request.Request(f"https://api.github.com/repos/{ENV['TASKS_REPO']}/contents/replies/{ref}.json", method="PUT",
+                                 data=json.dumps({"message": "reply", "content": body}).encode(), headers={**gh, "Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=30).read()
+    post(f"https://api.github.com/repos/{ENV['GITHUB_REPOSITORY']}/actions/workflows/reply.yml/dispatches",
+         {"Authorization": f"Bearer {ENV['DISPATCH_TOKEN']}", "Accept": "application/vnd.github+json"},
+         {"ref": "main", "inputs": {"ref": ref}})
+
+
 def post(url, headers, payload):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={**headers, "Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -151,6 +165,7 @@ def main():
         status[H(k)] = s
 
     # every new comment by someone else on related tickets, or naming me anywhere (last hour), with link + time
+    replies = []
     name = myself["displayName"].replace('"', "")
     recent = {i["key"]: i for q in (f"{REL} AND updated >= -60m", f'updated >= -60m AND comment ~ "\\"{name}\\""')
               for i in jql(q, "summary,customfield_10001", 50)}
@@ -166,6 +181,8 @@ def main():
             at = dt.datetime.strptime(c["created"][:19], "%Y-%m-%dT%H:%M:%S").replace(
                 tzinfo=dt.datetime.strptime(c["created"][-5:], "%z").tzinfo).astimezone(VN).strftime("%H:%M %d/%m")
             what = "tag bạn" if me in json.dumps(c["body"]) else "comment"
+            if (k in work or what == "tag bạn") and ENV.get("TASKS_PAT") and ENV.get("DISPATCH_TOKEN"):
+                replies.append((k, c["id"], k in work))  # Claude answers it (reply.yml); the 💬 note goes out now
             out.append((f, k, f'{"🔔" if what == "tag bạn" else "💬"} <b>{esc(c["author"]["displayName"])}</b> {what} · '
                               f'<a href="{JIRA}/browse/{k}?focusedCommentId={c["id"]}">{k}</a> · {at}\n'
                               f'<i>{esc(f["summary"][:80])}</i>\n{esc(t[:300])}', False))
@@ -180,6 +197,11 @@ def main():
              + "\n".join(f"• {link(k)} {esc(f['summary'])}" for f, k in members)
              + (f"\n<i>gom vì cùng {esc(why)}</i>" if len(members) > 1 else "")
              + "\n<i>Làm code → test iOS/Android → báo cáo vào đây.</i>", False)
+    for k, cid, own in replies:
+        try:
+            queue_reply(k, cid, own)
+        except Exception as e:  # noqa: BLE001  the 💬 note already went out; Percy can still answer by hand
+            print(f"reply queue failed: {type(e).__name__}")
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     json.dump({"v": 2, "seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
                }, open(STATE, "w"))  # no timestamp: an unchanged scan must not commit
