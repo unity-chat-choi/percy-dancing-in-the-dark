@@ -65,6 +65,10 @@ send_report() {  # <issue> <reported|reported-partial>: merged report of whateve
   python3 -I "$R/tg-report.py" out/telegram.md ctx/context.md "$key · QC · task #$n$tag" >/dev/null
   [ ! -s out/report.html ] || python3 -I "$R/tg-doc.py" out/report.html ctx/context.md "$key · màn lệch: Figma | iOS | Android (HTML)" >/dev/null
   label DELETE "$n" "reported-partial"; label POST "$n" "" "$mark"
+  # Both platforms PASS -> `ship`: the Mac (ship.sh) pushes, opens the RN MR, ports, then Jira comment + REVIEW CODE.
+  if [ "$mark" = reported ] && python3 -I -c 'import json,sys; sys.exit(0 if all(json.load(open(f)).get("result")=="PASS" for f in sys.argv[1:]) else 1)' qc/ios/verdict.json qc/android/verdict.json 2>/dev/null; then
+    label POST "$n" "" ship; log "both platforms pass: ship"
+  fi
   rm -rf qc out
 }
 

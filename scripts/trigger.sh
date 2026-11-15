@@ -17,3 +17,6 @@ gh workflow run daily.yml -R "$R" -f poll=true -f dryrun=false >/dev/null 2>&1
 # Backup for the 15-min scan cron (GitHub cron is unreliable): one dispatch per quarter hour.
 Q="$M/scan-$(date +%Y%m%d%H)-$(( 10#$(date +%M) / 15 ))"; [ -e "$Q" ] || { touch "$Q"; gh workflow run scan.yml -R "$R" >/dev/null 2>&1; }
 find "$M" -type f -mtime +7 -delete
+
+# Mac half of "both platforms pass": push, RN MR, Kotlin port, Jira queue (needs the migration SSO on this Mac).
+bash "$(dirname "$0")/ship.sh" || true
