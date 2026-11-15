@@ -182,7 +182,7 @@ def main():
              + "\n<i>Làm code → test iOS/Android → báo cáo vào đây.</i>", False)
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     json.dump({"v": 2, "seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
-               "at": dt.datetime.now().isoformat()}, open(STATE, "w"))
+               }, open(STATE, "w"))  # no timestamp: an unchanged scan must not commit
     print(f"scan: {len(out)} new" + (" (first run: baseline only)" if first else ""))  # counts only: public log
 
 
