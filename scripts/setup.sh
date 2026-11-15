@@ -2,7 +2,7 @@
 # Load every secret this repo's workflows need from local files into GitHub Actions secrets.
 # Usage: scripts/setup.sh [owner/repo]   (needs: gh logged in with repo scope)
 # Sources (copy them to a new machine first, chmod 600, never commit them):
-#   ~/.config/cutcut/uniscore-runner-secrets.env   GITLAB_*, JIRA_*, FIGMA_TOKEN, CLAUDE_CODE_OAUTH_TOKEN_1..3, TG_*
+#   ~/.config/cutcut/uniscore-runner-secrets.env   GITLAB_* (GITLAB_TV_TOKEN = Kotlin GitLab, Mac only), JIRA_*, FIGMA_TOKEN, CLAUDE_CODE_OAUTH_TOKEN_1..3, TG_*
 #   ~/.claude/squad-webhooks.json                  {"<space>": "<Google Chat webhook>"}
 #   ~/.claude/squad-members.json                   {"<alias>": "<Chat user id>"}
 #   ~/.claude/jira-members.json                    {"<alias>": "<Jira accountId>"}
@@ -34,6 +34,11 @@ gh secret list -R "$REPO"
 # Mac half of the sprint retro (AI cost + lessons), Friday 17:05.
 if [ "$(uname)" = Darwin ]; then
   repo="$(cd "$(dirname "$0")/.." && pwd)"
+  # glab for both GitLabs: RN MRs (gitlab.com) and the Kotlin port MRs that port-watch waits for (gitlab.uniscore.tv).
+  command -v glab >/dev/null || brew install glab
+  [ -n "${GITLAB_TOKEN:-}" ] && printf %s "$GITLAB_TOKEN" | glab auth login --hostname gitlab.com --stdin >/dev/null && echo "glab gitlab.com ok"
+  if [ -n "${GITLAB_TV_TOKEN:-}" ]; then printf %s "$GITLAB_TV_TOKEN" | glab auth login --hostname gitlab.uniscore.tv --stdin >/dev/null && echo "glab gitlab.uniscore.tv ok"
+  else echo "skip  glab gitlab.uniscore.tv (GITLAB_TV_TOKEN empty: create an api token there and add it)"; fi
   plist="$HOME/Library/LaunchAgents/com.percy.retro.plist"
   sed "s#__REPO__#$repo#" "$repo/mac/com.percy.retro.plist" > "$plist"
   launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
