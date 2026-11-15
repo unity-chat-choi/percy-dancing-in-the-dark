@@ -185,6 +185,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
     prompt="$(cat runner/prompts/qc.md; echo; sed "s/\$APP_ID/$APP_ID/g" "runner/prompts/qc-$P.md")"$'\n\n'"Ticket(s): $KEYS. The app is a staging Release build (JS bundled); after switching mode relaunch it."
     python3 -I "$R/lessons.py" get ctx/lessons.md >/dev/null
     python3 -I "$R/flows.py" get ctx/flows >/dev/null 2>&1 || true
+    python3 -I "$R/flows.py" get ctx/states states >/dev/null 2>&1 || true
     python3 -I "$R/flows.py" get ctx/scenarios "scenarios/$KEY" >/dev/null 2>&1 || true
     # same data as the other platform, when it went first
     python3 -I "$R/task-files.py" get "$N" "$O" ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json
@@ -221,6 +222,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   fi
   python3 -I "$R/lessons.py" add ctx/lessons-new.md 2>/dev/null || true
   python3 -I "$R/flows.py" put ctx/flows-new 2>/dev/null || true
+  python3 -I "$R/flows.py" put ctx/states-new states 2>/dev/null || true
   python3 -I "$R/flows.py" put ctx/scenarios-new "scenarios/$KEY" 2>/dev/null || true
   python3 -I "$R/qc-metrics.py" add "$P" 2>/dev/null || true
   step "$N" "Lưu kết quả QC"

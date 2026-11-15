@@ -3,7 +3,7 @@ Stored in the private task repo under flows/ (app details stay private), next to
 
 get <dir> [path]   download every flow under <path> (default flows/) into <dir>
 put <dir> [path]   upload <dir>/*.yaml to <path> (same name replaces the stored flow)
-Per-ticket test scenarios live under scenarios/<ticket key>/.
+Per-ticket test scenarios live under scenarios/<ticket key>/, app data snapshots (app-state.sh, .tgz) under states/.
 Env: GH_TOKEN, TASKS_REPO
 """
 import base64, glob, json, os, sys, urllib.error, urllib.request
@@ -21,7 +21,7 @@ def call(url, data=None, method=None):
 
 def listing():
     try:
-        return {f["name"]: f for f in call(API) if f["name"].endswith(".yaml")}
+        return {f["name"]: f for f in call(API) if f["name"].endswith((".yaml", ".tgz"))}
     except urllib.error.HTTPError:
         return {}
 
@@ -34,7 +34,7 @@ if cmd == "get":
     print(f"flows: {len(have)}")
 elif cmd == "put":
     n = 0
-    for p in sorted(glob.glob(os.path.join(d, "*.yaml"))):
+    for p in sorted(glob.glob(os.path.join(d, "*.yaml")) + glob.glob(os.path.join(d, "*.tgz"))):
         name = os.path.basename(p)
         body = {"message": f"flow {name}", "content": base64.b64encode(open(p, "rb").read()).decode()}
         if name in have:

@@ -387,6 +387,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py get ctx/lessons.md
           python3 -I runner/scripts/flows.py get ctx/flows || true
+          python3 -I runner/scripts/flows.py get ctx/states states || true
           python3 -I runner/scripts/flows.py get ctx/scenarios "scenarios/$KEY" || true
           python3 -I runner/scripts/task-files.py get "$ISSUE" android ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
@@ -412,6 +413,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
           python3 -I runner/scripts/flows.py put ctx/flows-new || true
+          python3 -I runner/scripts/flows.py put ctx/states-new states || true
           python3 -I runner/scripts/flows.py put ctx/scenarios-new "scenarios/$KEY" || true
           python3 -I runner/scripts/qc-metrics.py add "$PLATFORM" || true
 
@@ -552,6 +554,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py get ctx/lessons.md
           python3 -I runner/scripts/flows.py get ctx/flows || true
+          python3 -I runner/scripts/flows.py get ctx/states states || true
           python3 -I runner/scripts/flows.py get ctx/scenarios "scenarios/$KEY" || true
           python3 -I runner/scripts/task-files.py get "$ISSUE" ios ctx/peer >/dev/null 2>&1; [ -s ctx/peer/test-data.json ] && cp ctx/peer/test-data.json ctx/peer-test-data.json || true
 
@@ -604,6 +607,7 @@ jobs:
         run: |
           python3 -I runner/scripts/lessons.py add ctx/lessons-new.md || true
           python3 -I runner/scripts/flows.py put ctx/flows-new || true
+          python3 -I runner/scripts/flows.py put ctx/states-new states || true
           python3 -I runner/scripts/flows.py put ctx/scenarios-new "scenarios/$KEY" || true
           python3 -I runner/scripts/qc-metrics.py add "$PLATFORM" || true
 
