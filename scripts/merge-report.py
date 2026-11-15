@@ -27,11 +27,11 @@ def load(p):
         pairs = json.load(open(os.path.join(d, "pairs.json")))
     except (OSError, ValueError):
         pairs = []
-    shots = sorted(f for f in os.listdir(d) if f.endswith(".png"))
+    shots = sorted(f for f in os.listdir(d) if f.endswith((".png", ".jpg")))
     if not pairs:  # group "<n>-<screen>-<mode>.png"
         g = {}
         for f in shots:
-            m = re.match(r"(.+)-(light|dark|rtl)\.png$", f)
+            m = re.match(r"(.+)-(light|dark|rtl)\.(?:png|jpg)$", f)
             g.setdefault(m.group(1) if m else f, {})[m.group(2) if m else "light"] = f
         pairs = [{"screen": k, "shots": v} for k, v in g.items()]
     return {"md": md, "pairs": pairs, "dir": d, "verdict": verdict(md)}
@@ -152,7 +152,7 @@ if figmas:  # Figma frames uploaded by the caller to qc/issue-N/figma/
     base = f"https://github.com/{os.environ['TASKS_REPO']}/blob/HEAD/qc/issue-{issue}/figma"
     comment += "\n### Figma\n" + "\n".join(f'<img src="{base}/{f}?raw=true" width="220" alt="{f}">' for f in figmas) + "\n"
 for p, d in data.items():
-    imgs = [f for f in sorted(os.listdir(d["dir"])) if f.endswith(".png")]
+    imgs = [f for f in sorted(os.listdir(d["dir"])) if f.endswith((".png", ".jpg"))]
     if imgs:
         base = f"https://github.com/{os.environ['TASKS_REPO']}/blob/HEAD/qc/issue-{issue}/{p}"
         comment += f"\n### Ảnh {NAME[p]}\n" + "\n".join(f'<img src="{base}/{f}?raw=true" width="220" alt="{f}">' for f in imgs) + "\n"

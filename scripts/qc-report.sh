@@ -18,13 +18,27 @@ print((d.get("result") or "")[:1500])' ctx/qc.json || echo "Claude không trả 
 fi
 [ -s ctx/pairs.json ] || echo '[]' > ctx/pairs.json
 [ -s ctx/verdict.json ] || echo '{"result":"BLOCKED","modes":{},"blocker":"no verdict"}' > ctx/verdict.json
-# Evidence only, light: drop scratch shots (tmp-*) and shrink the rest to 800px wide (~2.7MB → ~0.3MB each).
-rm -f shots/tmp*.png
+# Keep every shot, but light: 800px JPEG q75 (~40KB) instead of the device's full-size PNG (~2.7MB).
 for f in shots/*.png; do
   [ -f "$f" ] || continue
-  if command -v sips >/dev/null; then sips -Z 800 "$f" >/dev/null 2>&1; else convert "$f" -resize '800x800>' "$f" 2>/dev/null; fi
+  j="${f%.png}.jpg"
+  if command -v sips >/dev/null; then sips -Z 800 -s format jpeg -s formatOptions 75 "$f" --out "$j" >/dev/null 2>&1
+  else convert "$f" -resize '800x800>' -quality 75 "$j" 2>/dev/null; fi
+  [ -s "$j" ] && rm -f "$f"
 done
-python3 -I $R/task-files.py put "$ISSUE" "$P" ctx/qc-report.md ctx/pairs.json ctx/verdict.json ctx/test-data.json ctx/qc-timeline.txt shots/*.png
+python3 -I - <<'PYJ' || true
+import json, os
+try:
+    pairs = json.load(open("ctx/pairs.json"))
+except (OSError, ValueError):
+    pairs = []
+for pr in pairs:  # point shot names at the JPEGs (Figma names stay .png)
+    for m, f in (pr.get("shots") or {}).items():
+        if f and f.endswith(".png") and os.path.exists("shots/" + f[:-4] + ".jpg"):
+            pr["shots"][m] = f[:-4] + ".jpg"
+json.dump(pairs, open("ctx/pairs.json", "w"), ensure_ascii=False)
+PYJ
+python3 -I $R/task-files.py put "$ISSUE" "$P" ctx/qc-report.md ctx/pairs.json ctx/verdict.json ctx/test-data.json ctx/qc-timeline.txt shots/*.jpg shots/*.png
 
 read -r DONE BLOCKER < <(python3 -I -c 'import json,sys
 v=json.load(open(sys.argv[1])); m=v.get("modes") or {}
