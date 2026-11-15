@@ -1,0 +1,70 @@
+name: watch
+# Two always-on Windows machines (public repo = free minutes), each looping for ~5h50m:
+#   jira: scan.py every minute (new related tickets, QC send-backs, every new comment with link + time)
+#   tg:   daily.py poll every 20 s (▶️/👀 buttons, ✅/❌ drafts, ❤ reactions)
+# The hourly schedule queues the next run per machine (concurrency keeps one running + one waiting),
+# so when one run hits its time limit the next starts right away. Public log: counts only.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # state/*.json (hashed ids only)
+  actions: write   # auto-start the ticket workflow
+
+jobs:
+  loop:
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [jira, tg]
+    runs-on: windows-latest
+    timeout-minutes: 355
+    concurrency: watch-${{ matrix.role }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROLE: ${{ matrix.role }}
+      SCAN_STATE: state/scan-state.json
+      SCAN_HASH: "1"
+      REACT_ONLY: "1"
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      TG_BOT_TOKEN_1: ${{ secrets.TG_BOT_TOKEN_1 }}
+      TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
+      TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+      TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+      TASKS_PAT: ${{ secrets.TASKS_PAT }}
+      TASKS_REPO: ${{ secrets.TASKS_REPO }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+      GOOGLE_OAUTH: ${{ secrets.GOOGLE_OAUTH }}
+      DAILY_SHEET_ID: ${{ secrets.DAILY_SHEET_ID }}
+      DAILY_ROW_NAME: ${{ secrets.DAILY_ROW_NAME }}
+      CHAT_WEBHOOKS: ${{ secrets.CHAT_WEBHOOKS }}
+      CHAT_MEMBERS: ${{ secrets.CHAT_MEMBERS }}
+      JIRA_MEMBERS: ${{ secrets.JIRA_MEMBERS }}
+      OFF_DAYS: ${{ vars.OFF_DAYS }}
+      DISPATCH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: loop
+        run: |
+          git config user.name percy-ticket-bot
+          git config user.email 62367533+nguyenphp@users.noreply.github.com
+          end=$(( $(date +%s) + 345 * 60 ))
+          if [ "$ROLE" = jira ]; then cmd=scripts/scan.py; f=state/scan-state.json; gap=60
+          else cmd=scripts/daily.py; f=state/daily-state.json; gap=20; fi
+          while [ "$(date +%s)" -lt "$end" ]; do
+            git pull -q --rebase || git rebase --abort 2>/dev/null
+            python -I "$cmd" || echo "$ROLE: run failed"
+            if [ -n "$(git status --porcelain "$f")" ]; then
+              git add "$f" && git commit -qm "state: $ROLE" && { git pull -q --rebase && git push -q || echo "$ROLE: push failed"; }
+            fi
+            sleep "$gap"
+          done

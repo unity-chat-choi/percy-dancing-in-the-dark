@@ -1,8 +1,8 @@
 """Rule-based Jira watcher (no LLM, no tokens): runs on the Mac every 5 min from trigger.sh.
 
 Rules (JQL), each item reported once (state in ~/.cache/percy-scan/state.json):
-  new_task   assigned to me / I'm Engineer, in an open sprint, not a Bug, not seen before
-  new_bug    Bug assigned to me / I'm Engineer, not seen before
+  new_task   any open ticket I'm assignee / Engineer / reporter / watcher of, not seen before
+  new_bug    same, type Bug (only my own sprint tickets and bugs are auto-started on the runner)
   qc_back    my ticket moved to FIXING / Review fail since the last scan (QC sent it back)
   comment    a new comment by someone else on my tickets (🔔 when it @mentions me), with link + time
 Each report goes to the ticket's squad topic with buttons: ▶️ Giao runner làm (run:<KEY>) / 👀 Để sau (skip:<KEY>).
@@ -24,6 +24,8 @@ STATE = os.environ.get("SCAN_STATE") or f"{HOME}/.cache/percy-scan/state.json"
 # In the public runner repo the state is committed, so keys and comment ids are stored only as hashes.
 H = (lambda x: hashlib.sha1(str(x).encode()).hexdigest()[:12]) if os.environ.get("SCAN_HASH") == "1" else str
 MINE = "(assignee = currentUser() OR cf[10075] = currentUser())"
+# Anything that concerns me: mine + reported by me + watched by me (Jira adds the watcher when someone tags you on create).
+REL = "(assignee = currentUser() OR cf[10075] = currentUser() OR reporter = currentUser() OR watcher = currentUser())"
 BACK = {"fixing", "review fail"}
 VN = dt.timezone(dt.timedelta(hours=7))
 
@@ -128,25 +130,32 @@ def main():
     except (OSError, ValueError):
         st = {}
     first = not st
+    quiet = first or st.get("v") != 2  # v2 widened the scope to REL: record the newly visible tickets without a flood
     seen, status, comments = set(st.get("seen", [])), st.get("status", {}), set(st.get("comments", []))
-    me = get(f"{JIRA}/rest/api/3/myself")["accountId"]
+    myself = get(f"{JIRA}/rest/api/3/myself")
+    me = myself["accountId"]
     out = []
 
-    for i in jql(f"{MINE} AND (sprint in openSprints() OR type = Bug) AND statusCategory != Done ORDER BY created DESC"):
+    # Only my own sprint tickets / bugs are handed to the runner; everything related is reported.
+    work = {i["key"] for i in jql(f"{MINE} AND (sprint in openSprints() OR type = Bug) AND statusCategory != Done", "summary")}
+    for i in jql(f"{REL} AND statusCategory != Done ORDER BY created DESC"):
         k, f = i["key"], i["fields"]
         s, kind = f["status"]["name"], f["issuetype"]["name"]
         if H(k) not in seen:
             seen.add(H(k))
-            if not first:
+            if not quiet:
                 tag = "🐞 <b>Bug mới</b>" if kind == "Bug" else "🆕 <b>Task mới</b>"
-                out.append((f, k, f"{tag} · {link(k)} {esc(f['summary'])}\n<i>{esc(s)} · {esc(team(f) or 'chưa gắn squad')}</i>", True))
+                out.append((f, k, f"{tag} · {link(k)} {esc(f['summary'])}\n<i>{esc(s)} · {esc(team(f) or 'chưa gắn squad')}</i>", k in work))
         elif status.get(H(k)) and status[H(k)].lower() != s.lower() and s.lower() in BACK and not first:
-            out.append((f, k, f"↩️ <b>QC trả về</b> · {link(k)} {esc(f['summary'])}\n<i>{esc(status[H(k)])} → {esc(s)}</i>", True))
+            out.append((f, k, f"↩️ <b>QC trả về</b> · {link(k)} {esc(f['summary'])}\n<i>{esc(status[H(k)])} → {esc(s)}</i>", k in work))
         status[H(k)] = s
 
-    # every new comment by someone else on my tickets (updated in the last hour), with link + time
-    for i in jql(f"{MINE} AND updated >= -60m", "summary,customfield_10001", 30):
-        k, f = i["key"], i["fields"]
+    # every new comment by someone else on related tickets, or naming me anywhere (last hour), with link + time
+    name = myself["displayName"].replace('"', "")
+    recent = {i["key"]: i for q in (f"{REL} AND updated >= -60m", f'updated >= -60m AND comment ~ "\\"{name}\\""')
+              for i in jql(q, "summary,customfield_10001", 50)}
+    for k, i in recent.items():
+        f = i["fields"]
         for c in get(f"{JIRA}/rest/api/3/issue/{k}/comment?orderBy=-created&maxResults=10").get("comments", []):
             if H(c["id"]) in comments:
                 continue
@@ -172,7 +181,7 @@ def main():
              + (f"\n<i>gom vì cùng {esc(why)}</i>" if len(members) > 1 else "")
              + "\n<i>Làm code → test iOS/Android → báo cáo vào đây.</i>", False)
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
-    json.dump({"seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
+    json.dump({"v": 2, "seen": sorted(seen), "status": status, "comments": sorted(comments)[-2000:],
                "at": dt.datetime.now().isoformat()}, open(STATE, "w"))
     print(f"scan: {len(out)} new" + (" (first run: baseline only)" if first else ""))  # counts only: public log
 

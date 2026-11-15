@@ -1,9 +1,8 @@
 name: scan
 # Schedules re-register on a push that touches this file.
 # Rule-based Jira watcher (no LLM): new tasks/bugs, QC send-backs, new comments (link + time) → Telegram (only when something is new).
+# Runs continuously from watch.yml (Windows, every minute); this file is the manual one-off.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

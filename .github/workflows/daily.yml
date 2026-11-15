@@ -19,8 +19,7 @@ on:
   schedule:
     - cron: "0 2 * * 1-5"
     - cron: "0 3 * * 1-5"
-    # Every 5 min: ❤ reactions and ✅/❌ draft buttons (Telegram keeps updates only 24h).
-    - cron: "*/5 * * * *"
+    # ❤ reactions and ✅/❌ / ▶️ buttons are polled continuously by watch.yml (every 20 s).
 
 permissions:
   contents: write  # commit state/daily-state.json (hashed ids only)
