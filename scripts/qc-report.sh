@@ -18,7 +18,13 @@ print((d.get("result") or "")[:1500])' ctx/qc.json || echo "Claude không trả 
 fi
 [ -s ctx/pairs.json ] || echo '[]' > ctx/pairs.json
 [ -s ctx/verdict.json ] || echo '{"result":"BLOCKED","modes":{},"blocker":"no verdict"}' > ctx/verdict.json
-python3 -I $R/task-files.py put "$ISSUE" "$P" ctx/qc-report.md ctx/pairs.json ctx/verdict.json ctx/test-data.json shots/*.png
+# Evidence only, light: drop scratch shots (tmp-*) and shrink the rest to 800px wide (~2.7MB → ~0.3MB each).
+rm -f shots/tmp*.png
+for f in shots/*.png; do
+  [ -f "$f" ] || continue
+  if command -v sips >/dev/null; then sips -Z 800 "$f" >/dev/null 2>&1; else convert "$f" -resize '800x800>' "$f" 2>/dev/null; fi
+done
+python3 -I $R/task-files.py put "$ISSUE" "$P" ctx/qc-report.md ctx/pairs.json ctx/verdict.json ctx/test-data.json ctx/qc-timeline.txt shots/*.png
 
 read -r DONE BLOCKER < <(python3 -I -c 'import json,sys
 v=json.load(open(sys.argv[1])); m=v.get("modes") or {}

@@ -193,8 +193,8 @@ while [ "$(date +%s)" -lt "$END" ]; do
       (cd app && perl -e 'alarm shift; exec @ARGV' "$QC_BUDGET" env -i HOME="$HOME" PATH="$PATH" LANG=en_US.UTF-8 ANDROID_HOME="${ANDROID_HOME:-}" APP_ID="$APP_ID" \
         CLAUDE_CODE_OAUTH_TOKEN="${!TOKEN_VAR}" claude -p "$MSG" \
         ${RESUME:+--resume "$RESUME"} --model "${MODEL:-sonnet}" --dangerously-skip-permissions \
-        --add-dir ../ctx --add-dir ../shots --output-format json \
-        --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch > ../ctx/qc.json 2>/dev/null) || true
+        --add-dir ../ctx --add-dir ../shots --output-format stream-json --verbose \
+        --disallowedTools Edit Write "Bash(git *)" "Bash(curl*)" WebFetch WebSearch 2>/dev/null | python3 -u "$R/qc-timeline.py" ../ctx) || true
       grep -qiE "hit your (session|usage|weekly) limit|usage limit reached" ctx/qc.json 2>/dev/null || break
       NEXT=$(EXCLUDE="$TRIED" python3 -I "$R/pick-account.py" auto 2>/dev/null) || break
       RESUME=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("session_id",""))' ctx/qc.json 2>/dev/null)
