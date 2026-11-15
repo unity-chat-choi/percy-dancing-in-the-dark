@@ -67,14 +67,24 @@ jobs:
         with: { path: runner }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - uses: actions/cache@v4
+      # app-develop first, so the prebuilt .app saved by the ticket job (same native key) can be found:
+      # warm-up then only re-bundles the JS (~3 min) instead of a full xcodebuild (30-40 min).
+      - name: clone app-develop
+        run: |
+          auth="Authorization: Basic $(printf 'oauth2:%s' "$GITLAB_TOKEN" | base64 | tr -d '\n')"
+          mkdir -p app && cd app && git init -q && git remote add origin "https://gitlab.com/$GITLAB_PROJECT.git"
+          git -c http.extraHeader="$auth" fetch -q --depth 1 origin app-develop && git checkout -q -f FETCH_HEAD
+      - name: native key
+        run: echo "NATIVE_KEY=ios-app-${{ runner.arch }}-${{ hashFiles('app/ios/**', '!app/ios/Pods/**', '!app/ios/build/**', 'app/yarn.lock', 'app/package.json', 'app/patches/**', 'app/.env*') }}" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@v4
+        with: { path: prebuilt, key: "${{ env.NATIVE_KEY }}" }
+      - uses: actions/cache/restore@v4
         with:
           path: |
             app/node_modules
             app/ios/Pods
-            build
-          key: shift-ios-${{ runner.arch }}-${{ github.run_id }}
-          restore-keys: shift-ios-${{ runner.arch }}-
+          key: ios-${{ runner.arch }}-${{ hashFiles('app/yarn.lock', 'app/patches/**', 'app/ios/Podfile') }}
+          restore-keys: ios-${{ runner.arch }}-
       - name: shift
         env: { WORKER: "${{ matrix.worker }}" }
         run: bash runner/scripts/shift.sh ios

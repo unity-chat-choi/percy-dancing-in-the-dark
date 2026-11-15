@@ -87,7 +87,15 @@ urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.
                        data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"}), timeout=20)
 PYA
 }
-if ! build_app; then
+prebuilt_app() {  # iOS warm-up: the ticket job's cached .app for these native files + a JS re-bundle, no xcodebuild
+  APP=$(ls -d "$W"/prebuilt/*.app 2>/dev/null | grep -v Extension | head -1); [ -n "$APP" ] || return 1
+  bash "$R/ios-js-swap.sh" "$APP" >/tmp/build.log 2>&1 || return 1
+  xcrun simctl install booted "$APP" || return 1
+  APP_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist"); export APP APP_ID
+  log "prebuilt app + JS re-bundle (no xcodebuild)"
+}
+if [ "$P" = ios ] && prebuilt_app; then :
+elif ! build_app; then
   # One alert per shift and platform (worker 1 only): app-develop itself does not build.
   if [ "${WORKER:-1}" = 1 ]; then
     errs=$( { grep -E ' error: |^e: |error:|What went wrong' -A2 /tmp/build.log | head -25; } 2>/dev/null )
