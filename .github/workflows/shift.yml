@@ -1,11 +1,12 @@
 name: shift
 run-name: shift
 # Work-hours QC shifts: a warm iOS simulator + Android emulator take queued tasks (labels ios-todo / android-todo).
-# 09:00-15:00 and 15:00-18:00 Vietnam time, Mon-Fri. Outside shifts, `ticket` builds cold instead.
+# Night only (Percy 16/11: daytime QC is done on his own devices): 19:00-01:00 and 01:00-04:00 Vietnam time, Mon-Fri.
+# A shift leaves after 20 idle minutes, so an empty night costs little. Weekends: `ticket` builds cold.
 on:
   schedule:
-    - cron: "0 2 * * 1-5"   # 09:00 VN, 6h
-    - cron: "0 8 * * 1-5"   # 15:00 VN, 3h
+    - cron: "0 12 * * 1-5"   # 19:00 VN, 6h
+    - cron: "0 18 * * 1-5"   # 01:00 VN, 3h
   workflow_dispatch:
     inputs:
       minutes: { description: "Shift length in minutes (max 350 ≈ 6h job limit; a relay shift starts 20 min before the end)", default: "350" }
@@ -37,7 +38,7 @@ env:
   CLAUDE_CODE_OAUTH_TOKEN_1: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_1 }}
   CLAUDE_CODE_OAUTH_TOKEN_2: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_2 }}
   CLAUDE_CODE_OAUTH_TOKEN_3: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_3 }}
-  MINUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.minutes || (github.event.schedule == '0 2 * * 1-5' && '350' || '175') }}
+  MINUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.minutes || (github.event.schedule == '0 12 * * 1-5' && '350' || '175') }}
 
 jobs:
   # Worker counts → matrix lists. Schedules use the defaults (2 iOS, 3 Android).

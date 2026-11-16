@@ -252,10 +252,12 @@ jobs:
           ISSUE: ${{ inputs.issue }}
         run: |
           active=$(GH_TOKEN=$ACTIONS_TOKEN gh api "repos/${{ github.repository }}/actions/workflows/shift.yml/runs?status=in_progress" --jq '.total_count' 2>/dev/null || echo 0)
-          if [ "${active:-0}" -gt 0 ] && [ "${{ inputs.qc }}" = true ]; then  # speed tests always build cold
+          # Weekday daytime (08:00-19:59 VN): Percy tests on his own devices, the runner QC waits for the night shift.
+          day=$(TZ=Asia/Ho_Chi_Minh date +%u%H | awk '{d=substr($0,1,1); h=substr($0,2)+0; print (d<=5 && h>=8 && h<20) ? 1 : 0}')
+          if { [ "${active:-0}" -gt 0 ] || [ "$day" = 1 ]; } && [ "${{ inputs.qc }}" = true ]; then  # speed tests always build cold
             [ "${{ inputs.ios }}" = true ] && gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=ios-todo" >/dev/null
             [ "${{ inputs.android }}" = true ] && gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=android-todo" >/dev/null
-            echo "shift=1" >> "$GITHUB_OUTPUT"; echo "queued for the shift"
+            echo "shift=1" >> "$GITHUB_OUTPUT"; echo "queued for the (night) shift"
           else
             echo "shift=0" >> "$GITHUB_OUTPUT"; echo "no shift running: cold build"
           fi
