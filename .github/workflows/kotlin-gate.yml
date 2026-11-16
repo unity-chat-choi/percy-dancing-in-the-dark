@@ -1,0 +1,27 @@
+name: kotlin-gate
+# Kotlin port follow-up without Percy's Mac: merge green unit MRs, approve green feature MRs for Mason,
+# post the Jira done comment once the Kotlin feature MR exists (scripts/kotlin-gate.py). Public log: MR numbers/counts.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: { contents: read }
+
+concurrency: kotlin-gate
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I scripts/kotlin-gate.py
+        env:
+          GITLAB_TV_TOKEN: ${{ secrets.GITLAB_TV_TOKEN }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TASKS_PAT: ${{ secrets.TASKS_PAT }}
+          TASKS_REPO: ${{ secrets.TASKS_REPO }}
