@@ -9,6 +9,9 @@ Rules:
 - Follow the repo's AGENTS.md and CLAUDE.md (house components, theme tokens, i18n in all 33 translation files, no `any`, one export per file, English comments). Read docs/ai/pitfalls.md and grep docs/ai/bugs/ for the area you touch.
 - If ../ctx/task.md has a "## Bug QC cần sửa" section, this is a fix round: fix exactly those bugs (scope ticket/blocking) first, minimal and safe, then re-verify. Bugs there come from QC on device with screenshots.
 - Finish what the ticket and the WIP aim at. Do not start unrelated work. If the spec is unclear or the API is missing, do not guess: list it under "Cần confirm".
+- API not on staging yet (route 404, field missing) but its contract is known (TDD/Confluence/[API] ticket): do not stop. Build the feature on a mock as in docs/ai/mock-data.md, with the flag written EXACTLY like
+  `const USE_MOCK = __DEV__; // MOCK(US-xxxx): replace with GET <endpoint> (US-yyyy) when the backend ships`
+  (QC switches this line on, prod keeps calling the real API). The mock data follows the contract and covers every state the UI has (e.g. live / not live, several items, long names, empty). List the endpoint under "Cần confirm" and write an ask for the backend (asks.json). Contract unknown → do not invent one: list it and ask.
 - Compare the UI code with every Figma frame: layout, spacing, sizes, colours (theme tokens), fonts, texts, empty/loading states. Fix real differences.
 - Check the code also holds in dark mode (theme tokens, no hard-coded colours) and RTL (row direction, flipped arrows, text alignment).
 - Read the QC test cases in "[QC] Test case & Testing" subtasks (TC_... tables) and any bugs QC reported in comments; make sure the code satisfies each one.

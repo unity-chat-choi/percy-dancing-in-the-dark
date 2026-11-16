@@ -26,7 +26,8 @@ q_path, branch, rn_mr, keys, imgs = sys.argv[1], sys.argv[2], sys.argv[3], sys.a
 q = json.load(open(q_path)) if os.path.exists(q_path) else []
 if any(e["branch"] == branch and not e.get("done") for e in q):
     sys.exit(f"already queued: {branch}")
-q.append({"branch": branch, "rn_mr": int(rn_mr), "tickets": [{"key": k, "images": imgs} for k in keys]})
+note = os.environ.get("MOCK_NOTE", "").strip()  # APIs still mocked: port-watch adds them to the Jira comment
+q.append({"branch": branch, "rn_mr": int(rn_mr), "tickets": [{"key": k, "images": imgs} for k in keys], **({"note": note} if note else {})})
 json.dump(q, open(q_path, "w"), indent=1)
 print(f"queued {branch}: MR RN !{rn_mr}, tickets {keys}, {len(imgs)} images")
 PY

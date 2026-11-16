@@ -293,6 +293,7 @@ jobs:
           # Test what the runner produced when it pushed something, else the developer's branch.
           ref="$branch"; git -c http.extraHeader="$auth" ls-remote --exit-code --heads "https://gitlab.com/$GITLAB_PROJECT.git" "runner/$branch" >/dev/null 2>&1 && ref="runner/$branch"
           git -c http.extraHeader="$auth" clone -q --depth 1 --branch "$ref" "https://gitlab.com/$GITLAB_PROJECT.git" app
+          (cd app && bash ../runner/scripts/qc-mock.sh)   # API not shipped yet: QC runs the feature on its mock data
           echo "testing $([ "$ref" = "$branch" ] && echo developer || echo runner) branch"
 
       - name: context
@@ -483,6 +484,7 @@ jobs:
           # Test what the runner produced when it pushed something, else the developer's branch.
           ref="$branch"; git -c http.extraHeader="$auth" ls-remote --exit-code --heads "https://gitlab.com/$GITLAB_PROJECT.git" "runner/$branch" >/dev/null 2>&1 && ref="runner/$branch"
           git -c http.extraHeader="$auth" clone -q --depth 1 --branch "$ref" "https://gitlab.com/$GITLAB_PROJECT.git" app
+          (cd app && bash ../runner/scripts/qc-mock.sh)   # API not shipped yet: QC runs the feature on its mock data
           echo "testing $([ "$ref" = "$branch" ] && echo developer || echo runner) branch"
 
       - name: context

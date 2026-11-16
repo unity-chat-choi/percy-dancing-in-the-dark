@@ -28,6 +28,10 @@ for N in $(gh api "repos/$TASKS_REPO/issues?labels=ship&state=open&per_page=20" 
   if git -C "$APP" fetch -q origin "runner/$BR" 2>/dev/null; then
     git -C "$APP" push -q origin "FETCH_HEAD:refs/heads/$BR" || { notify "$KEY: push bị từ chối (nhánh có commit mới hơn), cần xem tay"; continue; }
   fi
+  # Mocks for APIs the backend has not shipped (`MOCK(<KEY>): …` markers): listed in the MR and the Jira comment.
+  MOCKS=$(git -C "$APP" fetch -q origin "$BR" 2>/dev/null && git -C "$APP" grep -h -oE "MOCK\($KEY\).*" FETCH_HEAD -- src 2>/dev/null \
+          | sed -E 's/^MOCK\([^)]*\):? *//' | sort -u | head -5)
+  MOCKMD=""; [ -n "$MOCKS" ] && MOCKMD=$(printf '\n## Backend cần cung cấp (app đang chạy dữ liệu giả ở dev, prod gọi API thật)\n%s\n' "$(sed 's/^/- /' <<<"$MOCKS")")
 
   # 2. RN MR (reuse an open one).
   MR=$(glab api --hostname gitlab.com "projects/$(ENC "$GITLAB_PROJECT")/merge_requests?state=opened&source_branch=$(ENC "$BR")" 2>/dev/null \
@@ -38,8 +42,8 @@ for N in $(gh api "repos/$TASKS_REPO/issues?labels=ship&state=open&per_page=20" 
       gh api "repos/$TASKS_REPO/contents/shots/issue-$N/$f" -H "Accept: application/vnd.github.raw" > "$SHOTS/$f"
       IMGMD="$IMGMD $(curl -s -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -F "file=@$SHOTS/$f" "https://gitlab.com/api/v4/projects/$(ENC "$GITLAB_PROJECT")/uploads" | python3 -I -c 'import json,sys;print(json.load(sys.stdin).get("markdown",""))')"
     done
-    DESC=$(printf '## What & why\n- **%s**: %s\n- Jira: %s/browse/%s\n\n## Test\n- Runner QC passed on iOS + Android (light, dark, RTL); full report in the task.\n\n## Screenshots\n%s\n' \
-      "$KEY" "${TITLE#*$KEY}" "${JIRA_URL%/}" "$KEY" "$IMGMD")
+    DESC=$(printf '## What & why\n- **%s**: %s\n- Jira: %s/browse/%s\n%s\n## Test\n- Runner QC passed on iOS + Android (light, dark, RTL); full report in the task.\n\n## Screenshots\n%s\n' \
+      "$KEY" "${TITLE#*$KEY}" "${JIRA_URL%/}" "$KEY" "$MOCKMD" "$IMGMD")
     MR=$(glab mr create -R "$GITLAB_PROJECT" --source-branch "$BR" --target-branch app-develop --title "$KEY ${TITLE#*$KEY}" \
          --description "$DESC" --reviewer "$REVIEWER" --remove-source-branch --yes 2>&1 | grep -oE 'merge_requests/[0-9]+' | grep -oE '[0-9]+$')
     rm -rf "$SHOTS"
@@ -54,6 +58,6 @@ for N in $(gh api "repos/$TASKS_REPO/issues?labels=ship&state=open&per_page=20" 
   fi
 
   # 4. Jira done-comment + REVIEW CODE when the Kotlin MR exists (port-watch).
-  bash "$R/queue-port.sh" "$N" "$MR" 2>&1 | tail -1
+  MOCK_NOTE="$MOCKS" bash "$R/queue-port.sh" "$N" "$MR" 2>&1 | tail -1
   label DELETE "$N" ship; label POST "$N" "" shipped
 done

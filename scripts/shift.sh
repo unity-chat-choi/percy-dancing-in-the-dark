@@ -160,6 +160,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   REF="$BRANCH"; gl ls-remote --exit-code --heads "$REPO_URL" "runner/$BRANCH" >/dev/null 2>&1 && REF="runner/$BRANCH"
   step "$N" "Lấy code nhánh $([ "$REF" = "$BRANCH" ] && echo của dev || echo runner)"
   gl fetch -q --depth 50 origin "$REF" && git checkout -q -f FETCH_HEAD && git clean -qfd
+  bash "$R/qc-mock.sh"   # API not shipped yet: QC runs the feature on its mock data
   if [ "$(git rev-parse HEAD)" != "$BASE" ]; then  # Release build bundles the JS, so any change needs a rebuild
     yarn install --ignore-engines >/dev/null 2>&1
     # iOS JS-only change: re-bundle into the installed .app (~1-2 min) instead of xcodebuild.
