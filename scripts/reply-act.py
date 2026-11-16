@@ -19,6 +19,8 @@ try:
 except (OSError, ValueError, AttributeError):
     d = {"action": "ask_percy", "reply": "", "why": "Runner không đọc được quyết định của Claude"}
 act = d.get("action", "ask_percy")
+if act == "fix" and scan.work_hours():  # daytime: fixes are done on Percy's Mac, not on the runner
+    act, d["why"] = "ask_percy", "Giờ làm: sửa trên máy. " + d.get("why", "")
 if act == "fix" and not own:
     act, d["why"] = "ask_percy", "Yêu cầu sửa trên ticket không phải của anh: " + d.get("why", "")
 if act in ("reply", "fix") and not d.get("reply", "").strip():

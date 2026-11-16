@@ -87,8 +87,16 @@ def group_key(k, f):
     return "nhãn " + "".join(f"[{t}]" for t in tags[:5]) if len(tags) >= 2 else f"ticket {k}"
 
 
+def work_hours():
+    """Weekdays 08:00-19:59 Vietnam time: Percy works on his own Mac, the runner only notifies (Percy 16/11)."""
+    now = dt.datetime.now(VN)
+    return now.weekday() < 5 and 8 <= now.hour < 20
+
+
 def auto_start(items):
     """Group new tasks / bugs / QC send-backs, open one task per group in the private repo and start the runner."""
+    if work_hours():
+        return []  # daytime: Percy does it locally; the new-ticket note still goes out
     gh = {"Authorization": f"Bearer {ENV['TASKS_PAT']}", "Accept": "application/vnd.github+json"}
     busy = {m for i in get(f"https://api.github.com/repos/{ENV['TASKS_REPO']}/issues?state=open&per_page=100", gh)
             for m in re.findall(r"(?:US|UTD|UOB)-\d+", i["title"] + " " + (i.get("body") or "")) if "done" not in [x["name"] for x in i["labels"]]}
