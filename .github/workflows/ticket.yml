@@ -86,6 +86,11 @@ jobs:
             git -C app checkout -q -b "$BRANCH"; echo "BASE_REF=origin/app-develop" >> "$GITHUB_ENV"; echo "new branch from app-develop"
           fi
           git -C app -c http.extraHeader="$auth" fetch -q --depth 200 origin app-develop:refs/remotes/origin/app-develop
+          # Fix round: continue from the runner's previous work (runner/<branch>), never redo the ticket from scratch.
+          if [ "$(cat ctx/fix-round 2>/dev/null || echo 0)" -gt 0 ] && git -C app -c http.extraHeader="$auth" fetch -q --depth 60 origin \
+              "refs/heads/runner/$BRANCH:refs/remotes/origin/runner-prev" 2>/dev/null; then
+            git -C app reset -q --hard origin/runner-prev; echo "fix round: continuing from the runner branch"
+          fi
           git -C app config user.name "percy (runner)"
           git -C app config user.email 62367533+nguyenphp@users.noreply.github.com
 
