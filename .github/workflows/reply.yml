@@ -34,8 +34,10 @@ jobs:
       - uses: actions/checkout@v4
         with: { path: runner }
       - name: context
+        env: { TASKS_PAT: "${{ secrets.TASKS_PAT }}", TASKS_REPO: "${{ secrets.TASKS_REPO }}" }
         run: |
           mkdir -p ctx
+          GH_TOKEN="$TASKS_PAT" gh api "repos/$TASKS_REPO/contents/people.md" -H "Accept: application/vnd.github.raw" > ctx/people.md 2>/dev/null || true
           python3 -I runner/scripts/ticket-context.py "$KEY" ctx/context.md >/dev/null
           python3 -I - <<'EOF'
           import os, re, sys
