@@ -16,12 +16,12 @@ def main(argv):
     jira = open(argv[argv.index("--jira") + 1]).read().strip() if "--jira" in argv else ""
     chat = open(argv[argv.index("--chat") + 1]).read().strip() if "--chat" in argv else ""
     esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    # The poll job parses this exact layout back from the message, keep markers in sync with daily.py.
+    # Bodies are boxed (<pre>); Telegram hands the text back without tags. The poll job parses this exact layout back from the message, keep markers in sync with daily.py.
     text = f"📝 <b>DUYỆT GỬI</b> · {key} · {esc(squad)}"
     if jira:
-        text += f"\n━━ Jira comment\n{esc(jira)}"
+        text += f"\n━━ Jira comment\n<pre>{esc(jira)}</pre>"
     if chat:
-        text += f"\n━━ Google Chat\n{esc(chat)}"
+        text += f"\n━━ Google Chat\n<pre>{esc(chat)}</pre>"
     topics = json.loads(os.environ.get("TG_SQUAD_TOPICS") or "{}")
     msg = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "text": text, "parse_mode": "HTML",
            "disable_web_page_preview": True,
