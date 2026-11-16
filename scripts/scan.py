@@ -175,11 +175,13 @@ def main():
             if H(c["id"]) in comments:
                 continue
             comments.add(H(c["id"]))
-            if first or c["author"]["accountId"] == me:
+            created = dt.datetime.strptime(c["created"][:19], "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=dt.datetime.strptime(c["created"][-5:], "%z").tzinfo)
+            # An old comment shows up again when its ticket is edited (or the state lost it): only report fresh ones.
+            if first or c["author"]["accountId"] == me or created < dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2):
                 continue
             t = re.sub(r"\s+", " ", adf_text(c["body"])).strip()
-            at = dt.datetime.strptime(c["created"][:19], "%Y-%m-%dT%H:%M:%S").replace(
-                tzinfo=dt.datetime.strptime(c["created"][-5:], "%z").tzinfo).astimezone(VN).strftime("%H:%M %d/%m")
+            at = created.astimezone(VN).strftime("%H:%M %d/%m")
             what = "tag bạn" if me in json.dumps(c["body"]) else "comment"
             if (k in work or what == "tag bạn") and ENV.get("TASKS_PAT") and ENV.get("DISPATCH_TOKEN"):
                 replies.append((k, c["id"], k in work))  # Claude answers it (reply.yml); the 💬 note goes out now
