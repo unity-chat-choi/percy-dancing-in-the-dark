@@ -57,6 +57,7 @@ jobs:
         run: |
           mkdir -p ctx
           gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq .body > ctx/task.md
+          gh api "repos/$TASKS_REPO/contents/people.md" -H "Accept: application/vnd.github.raw" > ctx/people.md 2>/dev/null || true
           gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq '[.labels[].name|select(startswith("fix-round-"))|ltrimstr("fix-round-")|tonumber]|max // 0' > ctx/fix-round
           branch=$(grep -m1 -oE '^branch:[[:space:]]*\S+' ctx/task.md | sed -E 's/^branch:[[:space:]]*//')
           key=$(grep -m1 -oE '(US|UTD|UOB)-[0-9]+' <<<"$branch")
@@ -209,6 +210,9 @@ jobs:
           GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT }}
           GH_TOKEN: ${{ secrets.TASKS_PAT }}
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         run: |
           [ -s ctx/report.md ] || echo "(Claude không viết report)" > ctx/report.md
           [ "${PUSHED:-}" = 1 ] && printf '\n\nCode runner thêm (so với nhánh của bạn): https://gitlab.com/%s/-/compare/%s...runner/%s\n' "$GITLAB_PROJECT" "$BRANCH" "$BRANCH" >> ctx/report.md
@@ -221,6 +225,10 @@ jobs:
           python3 -I runner/scripts/short.py ctx/report.md ctx/report-short.md 3
           printf '\nChi tiết: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report-short.md
           python3 -I runner/scripts/tg-report.py ctx/report-short.md ctx/context.md "$KEY · code xong (${{ job.status }}) · task #$ISSUE"
+          # PO/BE questions → ✅ Gửi cards on Telegram, once per task (label asked-code)
+          if [ -s ctx/asks.json ] && ! gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq '[.labels[].name]|index("asked-code")' | grep -q '[0-9]'; then
+            python3 -I runner/scripts/propose.py --asks ctx/asks.json "$KEY" && gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=asked-code" >/dev/null || echo "asks failed"
+          fi
 
   # During a shift the warm workers take the QC (labels <platform>-todo); otherwise the cold jobs below run.
   route:

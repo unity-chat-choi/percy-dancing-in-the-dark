@@ -20,4 +20,8 @@ When done, write ../ctx/report.md in Vietnamese, short, for the developer readin
 ## So với Figma — each frame: khớp / lệch (what and why)
 ## Test — yarn verify result, jest suites run and results; QC test cases covered (TC_ID: ok / chưa) and old QC bugs (đã sửa / còn)
 ## Cần confirm — open questions for PO/BE, if any
+
+For every open question, also write ../ctx/asks.json so Percy can send it with one tap (one entry per person, group the points):
+[{"jira":"<Jira comment on this ticket in Percy's voice, Vietnamese, 2-4 sentences: starts with @alias of the PO (reporter of the parent story) for scope/requirement or the backend (assignee of the [API] ticket) for API; each question answerable yes/no, with the exact field/route/screen>","chat":"<1-2 sentence Google Chat reminder to the same person, ends with @alias>","why":"<1-2 sentences in Vietnamese telling Percy why this needs his OK before sending (who it pings, what it asks, why you could not decide it from the ticket/code/API)>"}]
+Aliases and forms of address: ../ctx/people.md. No questions → do not write the file. Questions already answered in the Jira comments are not open.
 ## Test trên máy — screens/flows to check on iOS and Android
