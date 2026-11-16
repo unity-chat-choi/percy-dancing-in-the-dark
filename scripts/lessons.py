@@ -23,6 +23,12 @@ norm = lambda l: re.sub(r"\W+", " ", l.lower()).strip()
 cmd = sys.argv[1]
 text, sha = fetch()
 if cmd == "get":
+    # ponytail: people.md rides along with the rulebook so every QC run can draft "@alias" Jira/Chat asks
+    try:
+        with urllib.request.urlopen(urllib.request.Request(URL.replace("lessons/qc.md", "people.md"), headers=H), timeout=30) as r:
+            text += "\n\n" + base64.b64decode(json.load(r)["content"]).decode()
+    except urllib.error.HTTPError:
+        pass
     open(sys.argv[2], "w").write(text)
 elif cmd == "add" and os.path.exists(sys.argv[2]):
     have = {norm(l) for l in text.splitlines()}

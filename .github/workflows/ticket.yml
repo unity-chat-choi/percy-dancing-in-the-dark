@@ -424,6 +424,10 @@ jobs:
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
           TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         run: bash runner/scripts/qc-report.sh ios "${{ job.status }}"
       # Bugs found: the app is about to change, so stop the other platform's QC now and let the fix round start
       # (it waits on this run: one run per task). Android usually finishes first, so iOS only tests the fixed app.
@@ -618,6 +622,10 @@ jobs:
           TASKS_REPO: ${{ secrets.TASKS_REPO }}
           TG_TICKET_BOT_TOKEN: ${{ secrets.TG_TICKET_BOT_TOKEN }}
           TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+          TG_SQUAD_TOPICS: ${{ secrets.TG_SQUAD_TOPICS }}
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         run: bash runner/scripts/qc-report.sh android "${{ job.status }}"
       # Bugs found: the app is about to change, so stop the other platform's QC now and let the fix round start
       # (it waits on this run: one run per task). Android usually finishes first, so iOS only tests the fixed app.

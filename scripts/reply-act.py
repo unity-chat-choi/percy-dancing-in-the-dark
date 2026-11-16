@@ -90,5 +90,17 @@ elif act == "fix":
 else:
     act = "ask_percy"
     msg = f"❓ <b>Cần anh xử lý</b> · {head}\n<i>{why}</i>" + (f"\nNháp: {scan.esc(d.get('reply', ''))}" if d.get("reply") else "")
-scan.send(f, key, ("🧪 (chạy thử) " if DRY else "") + msg, False)
+    # Author has an alias → the draft goes out as a ✅ Gửi card (Jira reply with a real mention) instead of plain text.
+    alias = next((a for a, i in json.loads(os.environ.get("JIRA_MEMBERS") or "{}").items() if i == who["accountId"]), None)
+    if d.get("reply", "").strip() and alias and not DRY:
+        try:
+            from propose import propose
+            propose(key, (f.get("customfield_10001") or {}).get("name") or "-", f"@{alias} {d['reply'].strip()}", "",
+                    f"{d.get('why', '')} · Comment của {who['displayName']}: \"{text[:200]}\" "
+                    f"{scan.JIRA}/browse/{key}?focusedCommentId={cid}")
+            msg = None
+        except Exception as e:  # noqa: BLE001  fall back to the plain note
+            print(f"propose failed: {type(e).__name__}")
+if msg:
+    scan.send(f, key, ("🧪 (chạy thử) " if DRY else "") + msg, False)
 print(f"reply: {act}")

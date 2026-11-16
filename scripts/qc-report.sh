@@ -84,6 +84,22 @@ repo = os.environ["TASKS_REPO"]
 issue = api(f"/repos/{repo}/issues/{n}")
 labels = [l["name"] for l in issue["labels"]]
 key = os.environ.get("KEY", "")
+asks = [a for a in v.get("asks") or [] if a.get("jira") or a.get("chat")][:3]
+if asks and "asked" not in labels:  # backend/PO drafts: Percy taps ✅ on Telegram to post Jira + Chat (once per task)
+    try:
+        import base64
+        sys.path.insert(0, "runner/scripts"); from propose import propose
+        ja = {"Authorization": "Basic " + base64.b64encode(f"{os.environ['JIRA_EMAIL']}:{os.environ['JIRA_API_TOKEN']}".encode()).decode()}
+        jget = lambda k: json.load(urllib.request.urlopen(urllib.request.Request(
+            f"{os.environ['JIRA_URL'].rstrip('/')}/rest/api/3/issue/{k}?fields=customfield_10001,parent", headers=ja), timeout=20))["fields"]
+        f = jget(key)
+        team = (f.get("customfield_10001") or {}).get("name") or (f.get("parent") and (jget(f["parent"]["key"]).get("customfield_10001") or {}).get("name")) or "-"
+        for a in asks:
+            propose(key, team, a.get("jira", ""), a.get("chat", ""), a.get("why", ""))
+        api(f"/repos/{repo}/issues/{n}/labels", {"labels": ["asked"]}, "POST")
+        confirm = []  # the drafts already cover the PO points
+    except Exception as e:  # noqa: BLE001  fall back to the plain notes below
+        print("asks failed:", type(e).__name__)
 if confirm:  # requirement conflicts: PO decides, never fixed automatically
     tg(f"❓ {key}: {len(confirm)} điểm cần PO xác nhận\n" + "\n".join(f"• {b['title'][:80]}: {(b.get('detail') or '')[:160]}" for b in confirm[:3]))
 if other:
