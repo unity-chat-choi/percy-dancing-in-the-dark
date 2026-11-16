@@ -51,6 +51,7 @@ jobs:
       JIRA_MEMBERS: ${{ secrets.JIRA_MEMBERS }}
       OFF_DAYS: ${{ vars.OFF_DAYS }}
       DISPATCH_TOKEN: ${{ github.token }}
+      GITLAB_TV_TOKEN: ${{ secrets.GITLAB_TV_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: loop
@@ -63,6 +64,8 @@ jobs:
           while [ "$(date +%s)" -lt "$end" ]; do
             git pull -q --rebase || git rebase --abort 2>/dev/null
             python -I "$cmd" || echo "$ROLE: run failed"
+            # GitHub's 15-min schedule for kotlin-gate is unreliable: the jira machine also runs it every 15 loops.
+            i=$((${i:-0} + 1)); if [ "$ROLE" = jira ] && [ $((i % 15)) = 1 ]; then python -I scripts/kotlin-gate.py || echo "kotlin-gate failed"; fi
             if [ -n "$(git status --porcelain "$f")" ]; then
               git add "$f" && git commit -qm "state: $ROLE" && { git pull -q --rebase && git push -q || echo "$ROLE: push failed"; }
             fi
