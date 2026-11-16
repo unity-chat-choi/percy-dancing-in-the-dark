@@ -227,7 +227,7 @@ jobs:
           label=$([ "${{ job.status }}" = success ] && echo done || echo blocked)
           gh api -X POST "repos/$TASKS_REPO/issues/$ISSUE/labels" -f "labels[]=$label" >/dev/null
           printf '\nTask: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report.md
-          python3 -I runner/scripts/short.py ctx/report.md ctx/report-short.md 3
+          cp ctx/report.md ctx/report-short.md   # full report on Telegram (Percy 16/11); tg-report splits long ones
           printf '\nChi tiết: https://github.com/%s/issues/%s\n' "$TASKS_REPO" "$ISSUE" >> ctx/report-short.md
           python3 -I runner/scripts/tg-report.py ctx/report-short.md ctx/context.md "$KEY · code xong (${{ job.status }}) · task #$ISSUE"
           # PO/BE questions → ✅ Gửi cards on Telegram, once per task (label asked-code)

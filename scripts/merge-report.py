@@ -129,7 +129,7 @@ if sections:  # everything matches: no HTML, the text result is enough
 
 head = f"# {title}\n" + " · ".join(f"**{NAME[p]}: {d['verdict']}**" for p, d in data.items()) + "\n"
 full = head + "".join(f"\n## {NAME[p]}\n" + re.sub(r"^## Kết quả:[^\n]*\n", "", d["md"], flags=re.M) for p, d in data.items())
-# Telegram: a few lines only (Percy does not read long messages); everything else is in the HTML and the task.
+# Telegram: verdicts + every bug in full (Percy 16/11: cut-off lines were unreadable); screenshots stay in the HTML.
 def short_verdict(d):
     try:
         v = json.load(open(os.path.join(d["dir"], "verdict.json")))
@@ -144,8 +144,8 @@ for p, d in data.items():
 seen, tops = set(), []
 for b in allbugs:
     if b["title"] not in seen:
-        seen.add(b["title"]); tops.append(f"🐞 {b['title'][:90]}")
-tg = " · ".join(lines) + ("\n" + "\n".join(tops[:3]) if tops else "") + "\n📄 So Figma | iOS | Android: file HTML bên dưới"
+        seen.add(b["title"]); tops.append(f"🐞 [{b.get('scope', '')}] {b['title']}" + (f" — {b['where']}" if b.get("where") else ""))
+tg = " · ".join(lines) + ("\n" + "\n".join(tops) if tops else "") + "\n📄 So Figma | iOS | Android: file HTML bên dưới"
 open(os.path.join(out, "telegram.md"), "w").write(tg + "\n")
 comment = full
 if figmas:  # Figma frames uploaded by the caller to qc/issue-N/figma/

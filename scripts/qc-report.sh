@@ -44,7 +44,7 @@ read -r DONE BLOCKER < <(python3 -I -c 'import json,sys
 v=json.load(open(sys.argv[1])); m=v.get("modes") or {}
 ok = v.get("result") in ("PASS","FAIL") and all(m.get(k) for k in ("light","dark","rtl"))
 miss = [k for k in ("light","dark","rtl") if not m.get(k)]
-print(1 if ok else 0, (v.get("blocker") or ("thiếu " + ", ".join(miss)) or "").replace("\n"," ")[:300])' ctx/verdict.json)
+print(1 if ok else 0, (v.get("blocker") or ("thiếu " + ", ".join(miss)) or "").replace("\n"," "))' ctx/verdict.json)
 LABELS=$(gh api "repos/$TASKS_REPO/issues/$ISSUE" --jq '[.labels[].name] | join(",")')
 TRIES=$(grep -oE "(^|,)$P-try-[0-9]+" <<<"$LABELS" | grep -oE '[0-9]+$' | sort -n | tail -1); TRIES=${TRIES:-0}
 gh api -X DELETE "repos/$TASKS_REPO/issues/$ISSUE/labels/$P-running" >/dev/null 2>&1
@@ -60,7 +60,7 @@ else
 import json, os, sys, urllib.request
 key, p, n, why = sys.argv[1:5]
 msg = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "disable_web_page_preview": True,
-       "text": f"⛔ {key}: QC {p} kẹt sau 3 lần\nVướng: {why[:160]}"}
+       "text": f"⛔ {key}: QC {p} kẹt sau 3 lần\nVướng: {why}"}
 urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
                        data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"}), timeout=20)
 PYA
@@ -72,14 +72,23 @@ n, p, runner = sys.argv[1:4]
 v = json.load(open("ctx/verdict.json"))
 fix = [b for b in v.get("bugs") or [] if b.get("scope") in ("ticket", "blocking")]
 other = [b for b in v.get("bugs") or [] if b.get("scope") == "other"]
-confirm = [b for b in v.get("bugs") or [] if b.get("scope") in ("confirm", "backend")]  # never auto-fixed
+confirm = [b for b in v.get("bugs") or [] if b.get("scope") == "confirm"]  # never auto-fixed
+backend = [b for b in v.get("bugs") or [] if b.get("scope") == "backend"]  # the backend's, the app only handles it
 H = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json", "Content-Type": "application/json"}
 api = lambda path, data=None, method=None: json.load(urllib.request.urlopen(urllib.request.Request(
     f"https://api.github.com{path}", data=json.dumps(data).encode() if data is not None else None, headers=H, method=method), timeout=30) or [None])
-def tg(text):
-    m = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "text": text[:3900], "disable_web_page_preview": True}
-    urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
-                           data=json.dumps(m).encode(), headers={"Content-Type": "application/json"}), timeout=20)
+def tg(text):  # full text, split at line breaks under Telegram's 4096-char cap
+    parts, cur = [], ""
+    for line in text.split("\n"):
+        while len(line) > 3800:
+            parts.append(line[:3800]); line = line[3800:]
+        if cur and len(cur) + len(line) > 3800:
+            parts.append(cur); cur = ""
+        cur = f"{cur}\n{line}" if cur else line
+    for p_ in parts + [cur]:
+        m = {"chat_id": os.environ["TG_NOTIFY_CHAT_ID"], "text": p_, "disable_web_page_preview": True}
+        urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{os.environ['TG_TICKET_BOT_TOKEN']}/sendMessage",
+                               data=json.dumps(m).encode(), headers={"Content-Type": "application/json"}), timeout=20)
 repo = os.environ["TASKS_REPO"]
 issue = api(f"/repos/{repo}/issues/{n}")
 labels = [l["name"] for l in issue["labels"]]
@@ -90,18 +99,20 @@ if asks and "asked-qc" not in labels:  # backend/PO drafts: Percy taps ✅ on Te
         sys.path.insert(0, "runner/scripts"); from propose import ask_all
         if ask_all(key, asks):
             api(f"/repos/{repo}/issues/{n}/labels", {"labels": ["asked-qc"]}, "POST")
-            confirm = []  # the drafts already cover the PO points
+            confirm = backend = []  # the drafts already cover them
     except Exception as e:  # noqa: BLE001  fall back to the plain notes below
         print("asks failed:", type(e).__name__)
 if confirm:  # requirement conflicts: PO decides, never fixed automatically
-    tg(f"❓ {key}: {len(confirm)} điểm cần PO/BE xác nhận\n" + "\n".join(f"• {b['title'][:80]}: {(b.get('detail') or '')[:160]}" for b in confirm[:3]))
+    tg(f"❓ {key}: {len(confirm)} điểm cần PO xác nhận\n\n" + "\n\n".join(f"• {b['title']}\n{b.get('detail') or ''}" for b in confirm))
+if backend:
+    tg(f"🔧 {key}: {len(backend)} lỗi của BACKEND (không phải lỗi app, app chỉ xử lý êm / chạy mock)\n\n" + "\n\n".join(f"• {b['title']}\n{b.get('detail') or ''}" for b in backend))
 if other:
-    tg(f"🐞 {key}: {len(other)} bug ngoài ticket (cần ticket Jira riêng)\n" + "\n".join(f"• {b['title'][:80]}" for b in other[:2]))
+    tg(f"🐞 {key}: {len(other)} bug app ngoài ticket (cần ticket Jira riêng)\n\n" + "\n\n".join(f"• {b['title']}\n{b.get('detail') or ''}" for b in other))
 if not fix:  # bugs of the ticket, or app bugs that block testing it, are fixed whatever the verdict (FAIL or BLOCKED)
     sys.exit(0)
 rounds = sum(1 for l in labels if l.startswith("fix-round-"))
 if rounds >= 2:
-    tg(f"⛔ {key}: sửa 2 vòng vẫn còn bug, cần anh xem\n" + "\n".join(f"• {b['title'][:80]}" for b in fix[:2])); sys.exit(0)
+    tg(f"⛔ {key}: sửa 2 vòng vẫn còn bug, cần anh xem\n" + "\n".join(f"• {b['title']}" for b in fix)); sys.exit(0)
 mark = f"fix-round-{rounds + 1}"
 if mark in labels:
     sys.exit(0)  # the other platform already opened this round
@@ -114,7 +125,7 @@ for q in ("ios", "android"):  # both platforms test again after the fix
         try: api(f"/repos/{repo}/issues/{n}/labels/{l}", method="DELETE")
         except Exception: pass
 api(f"/repos/{runner}/actions/workflows/ticket.yml/dispatches", {"ref": "main", "inputs": {"issue": str(n)}}, "POST")
-tg(f"🔧 {key}: {len(fix)} bug → đang sửa (vòng {rounds + 1}), xong QC lại\n" + "\n".join(f"• {b['title'][:80]}" for b in fix[:2]))
+tg(f"🔧 {key}: {len(fix)} bug → đang sửa (vòng {rounds + 1}), xong QC lại\n" + "\n".join(f"• {b['title']}" for b in fix))
 open("ctx/qc-status", "w").write("fixing")
 PYB
 echo "qc $P: $(cat ctx/qc-status)"
