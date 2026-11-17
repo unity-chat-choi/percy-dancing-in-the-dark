@@ -20,7 +20,7 @@ GH = {"Authorization": f"Bearer {os.environ['TASKS_PAT']}", "Accept": "applicati
 REPO = os.environ["TASKS_REPO"]
 RN = "https://gitlab.com/" + os.environ["GITLAB_PROJECT"] + "/-/merge_requests/"
 MASON = "712020:6df676d4-7e2b-4711-9f90-2f0c1f8119c6"
-BUGS = {"migration/bug-275", "migration/bug-295"}  # factory bug requests Percy filed
+BUGS = {"migration/bug-275", "migration/bug-295", "migration/bug-304", "migration/bug-305"}  # factory bug requests Percy filed
 
 
 def http(url, headers, data=None, method=None, raw=False):
