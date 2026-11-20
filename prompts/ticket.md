@@ -2,8 +2,15 @@ You are finishing a ticket for the uniscore-mobile React Native app on a CI runn
 
 Inputs (outside the repo, read them first):
 - ../ctx/context.md — the Jira ticket, parent story, sibling tickets ([API] etc.), all comments and the full Confluence specs. Read ALL of it, including Out of scope, open questions and the latest comments, before deciding anything.
-- ../ctx/figma/*.png — the Figma frames linked in the ticket. Open each with the Read tool.
+- ../ctx/figma/*.png — the Figma frames linked in the ticket; open each one. ../ctx/figma/*.spec.txt — the same frames as exact numbers (size, auto-layout gap/padding, radius, fill/text colour, font family/weight/size/line height, texts). Build from these numbers, not from guessing the PNG.
 - The current branch may already hold the developer's WIP: inspect `git log origin/app-develop..HEAD` and `git diff origin/app-develop...HEAD`. If it has none, implement the ticket from scratch.
+
+Order of work (do not skip a step):
+1. Read ALL of ../ctx/context.md: ticket, parent story, [API] sibling + its comments (the backend contract: route, params, response fields, enums), every Confluence page, QC subtasks. Write down the contract and every AC before coding.
+2. Football precedent: find the same screen/tab in src/modules/football (and basketball if it is newer) and read it end to end. Clone its structure and behaviour (tabs, sub-tabs, filters, bottom sheets, persisted filter state, empty/loading, tracking, notification bell) into this sport's module — copy, never import another sport's module. UI pieces that already exist as shared components (UBoxView, TitleDate, UFilterBarButton, UBottomSheet, URenderItemModal, Empty, AppActivityIndicator, CustomTouchableOpacity) are reused, not copied.
+3. Match Figma exactly: every size, padding, gap, radius, font and colour from the .spec.txt mapped to theme tokens / FONTS (docs/ai/design-tokens.md). Where Figma and football differ, Figma wins for the look, football for the behaviour.
+4. API: when the contract is known and staging has it, call the real endpoint (you may GET https://opta-api.uniscore.vn with curl to check the real shape and edge data; nothing else). Not on staging → mock per the rule below.
+5. QC test cases: go through every TC_ row of the "[QC] Test case & Testing" subtasks and every QC bug in comments; the code must satisfy each. Add jest tests for the logic (grouping, sorting, filters, default tab).
 
 Rules:
 - Follow the repo's AGENTS.md and CLAUDE.md (house components, theme tokens, i18n in all 33 translation files, no `any`, one export per file, English comments). Read docs/ai/pitfalls.md and grep docs/ai/bugs/ for the area you touch.
@@ -17,7 +24,7 @@ Rules:
 - Check the code also holds in dark mode (theme tokens, no hard-coded colours) and RTL (row direction, flipped arrows, text alignment).
 - Read the QC test cases in "[QC] Test case & Testing" subtasks (TC_... tables) and any bugs QC reported in comments; make sure the code satisfies each one.
 - Run `yarn verify` (base origin/app-develop) and the jest suites related to your files. Fix what your change broke. The repo has a pre-existing backlog; only new problems count.
-- Commit with messages `US-XXXX fix: ...` / `US-XXXX feat: ...` in English. No Co-Authored-By. Never commit .md files. Do not push, do not call external services, never print secrets or tokens.
+- Commit with messages `US-XXXX fix: ...` / `US-XXXX feat: ...` in English. No Co-Authored-By. Never commit .md files. Do not push, call no external service except GET on the staging API above, never print secrets or tokens.
 
 When done, write ../ctx/report.md in Vietnamese, short, for the developer reading on Telegram (no markdown tables):
 ## Đã làm

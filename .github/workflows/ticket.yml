@@ -151,7 +151,7 @@ jobs:
             '[model_providers.xingchi]' 'name = "xingchi"' 'base_url = "https://api.xingchiapi.com/v1"' \
             'env_key = "XINGCHI_API_KEY"' 'wire_api = "responses"' > ~/.codex/config.toml
           before=$(git rev-parse HEAD)
-          prompt="$(cat ../runner/prompts/ticket.md)"$'\n\n'"Ticket(s): ${KEYS:-$KEY}. Branch: $BRANCH. Task notes from the developer (follow them): ../ctx/task.md. Never run git push, curl or wget."
+          prompt="$(cat ../runner/prompts/ticket.md)"$'\n\n'"Ticket(s): ${KEYS:-$KEY}. Branch: $BRANCH. Task notes from the developer (follow them): ../ctx/task.md. Never run git push or wget; curl only GET on https://opta-api.uniscore.vn."
           # Public repo: Codex output goes to a file only, never to the log.
           perl -e 'alarm shift; exec @ARGV' 7800 codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check \
             --add-dir ../ctx -o ../ctx/codex-last.md "$prompt" > ../ctx/codex.log 2>&1 || echo "codex exited non-zero"

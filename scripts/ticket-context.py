@@ -44,6 +44,7 @@ def add(k, role):
     if k in seen:
         return seen[k]
     f = issue(k)
+    f["_role"] = role
     seen[k] = f
     team = (f.get("customfield_10001") or {}).get("name") if isinstance(f.get("customfield_10001"), dict) else None
     lines = [f"## {role}: {k} — {f['summary']}",
@@ -80,6 +81,22 @@ for k in seen:
         cid = (r.get("content") or {}).get("id")
         if cid and cid not in pages:
             pages[cid] = r["content"]["title"]
+# Backend contracts are often titled by feature, not by key: also search the parent story's tags + name.
+for k, f in list(seen.items()):
+    if f["_role"] != "Parent story" and not f["summary"].startswith("[API"):
+        continue
+    tags = [t for t in re.findall(r"\[([^\]]+)\]", f["summary"]) if "|" not in t and not re.fullmatch(r"API|APP|WEB|App|Web", t)]
+    words = tags + [w for w in re.sub(r"\[[^\]]*\]", " ", f["summary"]).split() if len(w) > 3][:3]
+    if len(words) < 2:
+        continue
+    cql = "type=page AND " + " AND ".join(f'text ~ "{w}"' for w in words)
+    try:
+        for r in get("/wiki/rest/api/search?" + urllib.parse.urlencode({"cql": cql, "limit": 5})).get("results", []):
+            cid = (r.get("content") or {}).get("id")
+            if cid and cid not in pages:
+                pages[cid] = r["content"]["title"]
+    except Exception as e:  # a bad CQL word must not stop the run
+        print("confluence skip:", type(e).__name__)
 for cid, title in pages.items():
     body = get(f"/wiki/rest/api/content/{cid}?expand=body.storage,version")
     text = strip_html(body["body"]["storage"]["value"])
