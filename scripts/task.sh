@@ -1,5 +1,6 @@
 #!/bin/bash
 # Create a task in the private task repo and start the ticket runner on it.
+# AGENT=codex makes Codex write the code (QC stays on Claude).
 # Usage: scripts/task.sh <branch> [account 1-3|auto] [model] [notes...]   (auto skips accounts near the weekly cap)
 #   The Jira key is taken from the branch name; the issue title is "<KEY> <Jira summary>".
 # Reads ~/.config/cutcut/uniscore-runner-secrets.env (TASKS_REPO, JIRA_*). Needs gh logged in.
@@ -22,5 +23,5 @@ PY
 BODY=$(printf 'branch: %s\njira: %s/browse/%s\n\n## Ghi chú\n%s\n' "$BRANCH" "${JIRA_URL%/}" "$KEY" "${NOTES:-Làm tiếp phần WIP trên nhánh theo ticket Jira, so với Figma, chạy verify/jest, viết báo cáo.}")
 URL=$(gh issue create -R "$TASKS_REPO" --title "$KEY $SUMMARY" --body "$BODY" --label todo)
 N=${URL##*/}
-gh workflow run ticket.yml -R "$RUNNER" -f issue="$N" -f account="$ACCOUNT" -f model="$MODEL" >/dev/null
+gh workflow run ticket.yml -R "$RUNNER" -f issue="$N" -f account="$ACCOUNT" -f model="$MODEL" -f agent="${AGENT:-claude}" >/dev/null
 echo "task #$N started: $URL"
