@@ -32,7 +32,7 @@ on:
         default: auto
       agent:
         description: "Who writes the code: claude or codex (QC stays on Claude)"
-        default: claude
+        default: codex
 
 permissions: {}
 
@@ -147,7 +147,7 @@ jobs:
         run: |
           npm i -g --silent @openai/codex >/dev/null 2>&1
           mkdir -p ~/.codex
-          printf '%s\n' 'model = "gpt-6.1-sol"' 'model_provider = "xingchi"' 'model_reasoning_effort = "high"' \
+          printf '%s\n' 'model = "gpt-6.1-sol"' 'model_provider = "xingchi"' 'model_reasoning_effort = "xhigh"' \
             '[model_providers.xingchi]' 'name = "xingchi"' 'base_url = "https://api.xingchiapi.com/v1"' \
             'env_key = "XINGCHI_API_KEY"' 'wire_api = "responses"' > ~/.codex/config.toml
           before=$(git rev-parse HEAD)
